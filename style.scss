@@ -47,7 +47,7 @@ chart {
     width: calc(100% - 20px);
     height: calc(100% - 90px - 40px);
 
-    &.grid {
+    &.x-axis, &.y-axis {
       z-index: 1;
     }
 
@@ -116,6 +116,7 @@ chart {
 
     .title {
       font-size: .9em;
+      font-weight: 500;
     }
 
     .values {

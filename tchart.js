@@ -1,5 +1,59 @@
-let TChart = (
-function() {
+const TChart = (
+() => {
+    let requestAnimationFrame = window.requestAnimationFrame
+        || window.mozRequestAnimationFrame
+        ||  window.webkitRequestAnimationFrame
+        || window.msRequestAnimationFrame,
+
+        cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
+
+    let colorsMap = {
+        day: {
+            background: '#FFF',
+            XYAxisLabels: '#A1ACB3',
+            gridBottomBorder: '#cacccd',
+            gridLine: '#d4d6d7',
+            zoomOverlay: 'rgba(239,243,245,0.5)',
+            zoomCarriageTool: 'rgba(218,231,240,0.5)',
+            verticalInfoLine: '#CBCFD2',
+            pointsInfoBackground: '#FFF',
+            pointsInfoTitle: '#000',
+            legendItemBorder: '#EFF3F5',
+            legendItemName: '#000',
+        },
+        night: {
+            background: '#242F3E',
+            XYAxisLabels: '#546778',
+            gridBottomBorder: '#495564',
+            gridLine: '#303D4C',
+            zoomOverlay: 'rgba(27,36,48,0.5)',
+            zoomCarriageTool: 'rgba(81,101,120,0.5)',
+            verticalInfoLine: '#4e5a69',
+            pointsInfoBackground: '#253241',
+            pointsInfoTitle: '#FFF',
+            legendItemBorder: '#495564',
+            legendItemName: '#FFF',
+        }
+    };
+
+    /**
+     * @const {string}
+     */
+    let X_COLUMN_TYPE = 'x',
+        LINE_COLUMN_TYPE = 'line',
+        MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    let config = {
+        nightMode: false,
+        containerId: 'charts-container'
+    };
+
+    let rerender, fullrerender;
+
+    window.addEventListener('resize', function() {
+        fullrerender();
+    });
+
     function generateId() {
       return Math.random().toString(36).substr(2, 9);
     }
@@ -81,10 +135,6 @@ function() {
 
         _postCreate (data) {
             this.el = document.getElementById(this._id);
-            // TODO: null dom element
-            if (!this.el) {
-                return
-            }
 
             this.rerender = (newData) => {
                 data = newData || data;
@@ -101,14 +151,12 @@ function() {
         };
 
         _raiseEvent (eventName, data) {
-            this._events.forEach(({event, handler, once}, index, object) => {
+            this._events.forEach(({event, handler}) => {
                 if (event === eventName) {
                     handler(data);
-                    if (once) {
-                        object.splice(index, 1);
-                    }
                 }
-            })
+            });
+            this._events = [];
         }
 
         _wrap (template) {
@@ -149,24 +197,66 @@ function() {
         }
     }
 
-    class GridLayer extends CanvasHTMLComponent {
-        constructor() {
-            super();
+    class XAxisLayer  extends CanvasHTMLComponent {
+        whenCreated(el) {
+            super.whenCreated(el);
 
-            this._prevMaxValY = null;
-            this._anim = new Animation(this._frameAnimHandler);
-        }
-
-        whenCreated(el, {chartData, opts}) {
-            super.whenCreated(el, {chartData, opts});
-
-            el.className = 'grid';
+            el.className = 'x-axis';
         }
 
         whenRendered(el, {chartData, opts}) {
-            let increase = this._prevMaxValY === void 0 || chartData.maxValY > this._prevMaxValY
+            this.clear();
+            this._renderXAxisDates(chartData, opts);
+        }
+
+        _renderXAxisDates (chartData, opts) {
+            this.ctx2d.font = '.7em' + ' ' + 'Arial';
+            this.ctx2d.fillStyle = getColor('XYAxisLabels');
+            this.ctx2d.textBaseline = 'bottom';
+
+            let labelOccupiedWidth = 0;
+            bypassXPoints(
+                this.el,
+                opts.drawingFrame,
+                chartData.xData,
+                chartData.minValX,
+                chartData.maxValX,
+                (v, x) => {
+                    let date = new Date(v),
+                        label = MONTH_NAMES[date.getMonth()] + ' ' + date.getDate(),
+                        labelWidth = this.ctx2d.measureText(label).width,
+                        labelMidWidth = labelWidth / 2,
+                        labelX = x - labelMidWidth,
+                        labelXEnd = x + labelMidWidth;
+
+                    if (labelOccupiedWidth <= labelX && x >= labelMidWidth && labelXEnd <= this.el.clientWidth) {
+                        labelOccupiedWidth = labelXEnd + 15; // + 15 minimal distance between labels
+
+                        this.ctx2d.fillText(label, labelX, this.el.clientHeight);
+                    }
+                }
+            );
+        }
+    }
+
+    class YAxisLayer extends CanvasHTMLComponent {
+        constructor() {
+            super();
+
+            this._prevMaxY = null;
+            this._anim = new Animation(this._frameAnimHandler);
+        }
+
+        whenCreated(el) {
+            super.whenCreated(el);
+
+            el.className = 'y-axis';
+        }
+
+        whenRendered(el, {chartData, opts}) {
+            let increase = this._prevMaxY === void 0 || chartData.maxY > this._prevMaxY
                 ? true
-                : (chartData.maxValY === this._prevMaxValY ? undefined : false);
+                : (chartData.maxY === this._prevMaxY ? undefined : false);
 
             // TODO: 0
             if (0 && increase === undefined) {
@@ -178,25 +268,22 @@ function() {
                     layer: this,
                     anim: this._anim,
                     ctx: this.ctx2d,
-                    chartData: chartData,
                     xData: chartData.xData,
-                    opts: opts,
-                    increase: increase,
-                    minValY: chartData.minValY,
-                    stepValY: (chartData.maxValY - chartData.minValY) / opts.yAxis.grid.horizontalLines,
+                    minY: chartData.minY,
+                    stepValY: (chartData.maxY - chartData.minY) / opts.yAxis.grid.horizontalLines,
                     stepHrzLine: (this.el.clientHeight - opts.drawingFrame.y + opts.drawingFrame.height) / opts.yAxis.grid.horizontalLines,
-                    duration: 1000,
-                    maxShift: 40
+                    maxShift: 40,
+                    chartData,
+                    opts,
+                    increase,
                 }, 1000
 
             ).onFinished(() => {
-                this._prevMaxValY = chartData.maxValY;
+                this._prevMaxY = chartData.maxY;
             });
         }
 
-        _frameAnimHandler() {
-            this.layer.clear();
-
+        _renderXYAxisLabels () {
             for (let i = 0, initY, animY; i < this.opts.yAxis.grid.horizontalLines; i++) {
                 initY = (i + 1) * this.stepHrzLine - 1;
 
@@ -220,37 +307,18 @@ function() {
 
                 this.ctx.textBaseline = 'top';
                 this.ctx.font = '.7em' + ' ' + 'Arial';
-                this.ctx.fillStyle = getColor('yAxisNumbers');
+                this.ctx.fillStyle = getColor('XYAxisLabels');
                 this.ctx.fillText(
-                    toHumanValue(this.minValY + this.stepValY * (this.opts.yAxis.grid.horizontalLines - 1 - i)),
+                    toHumanValue(this.minY + this.stepValY * (this.opts.yAxis.grid.horizontalLines - 1 - i)),
                     0,
                     animY - 15 + this.opts.drawingFrame.y
                 );
             }
+        }
 
-            this.ctx.textBaseline = 'bottom';
-
-            let labelOccupiedWidth = 0;
-            cc(
-                this.layer.el,
-                this.opts.drawingFrame,
-                this.chartData.xData,
-                this.chartData.minValX,
-                this.chartData.maxValX,
-                function (val, x) {
-                    let date = new Date(val),
-                        label = MONTH_NAMES[date.getMonth()] + ' ' + date.getDate(),
-                        labelWidth = this.ctx.measureText(label).width,
-                        labelMidWidth = labelWidth / 2,
-                        labelX = x - labelMidWidth;
-
-                    if (labelOccupiedWidth <= labelX && x >= labelMidWidth && x + labelMidWidth <= this.layer.el.clientWidth) {
-                        labelOccupiedWidth = labelX + labelWidth + 15; // + 15 minimal distance between labels
-
-                        this.ctx.fillText(label, labelX, this.layer.el.clientHeight);
-                    }
-                }.bind(this)
-            );
+        _frameAnimHandler () {
+            this.layer.clear();
+            this.layer._renderXYAxisLabels.call(this);
         }
     }
 
@@ -423,6 +491,7 @@ function() {
         constructor() {
             super();
 
+            this.renderedChartData = [];
             this._anim = new Animation(this._frameAnimHandler);
         }
 
@@ -432,19 +501,19 @@ function() {
             el.className = 'plot';
         }
 
-        whenRendered(el, {chartData, opts}) {
+        whenRendered(el, {chartData, opts, animate}) {
             this._anim.start(
                 {
+                    renderedChartData: this.renderedChartData,
+                    anim: this._anim,
                     ctx: this.ctx2d,
                     layer: this,
                     chartData,
-                    opts
+                    opts,
+                    animate
                 },
-                1000
-            ).onFinished(function() {
-                // renderedChartData = [];
-                // prevChartData = chartData;
-            });
+                800
+            );
         }
 
         _frameAnimHandler() {
@@ -472,23 +541,30 @@ function() {
                     x = points[i][0];
                     y = points[i][1];
 
-                    // let prevYVal = 0;
-                    // if (renderedChartData[lineIndex]) {
-                    //     if (renderedChartData[lineIndex][i]) {
-                    //         // prevYVal = renderedChartData[lineIndex][i][1];
-                    //     }
-                    // }
-                    // let yr;
-                    // if (y < prevYVal) {
-                    //     yr = prevYVal - anim.easeOutExpo(self.progress, 0, prevYVal - y, self.duration);
-                    // } else {
-                    //     yr = anim.easeOutExpo(self.progress, prevYVal, y - prevYVal, self.duration);
-                    // }
-                    this.ctx.lineTo(x, y)
+                    let yr;
+                    if (this.animate) {
+                        let prevY = 0;
+                        if (this.renderedChartData[lineIndex] !== undefined) {
+                            if (this.renderedChartData[lineIndex][i] !== undefined) {
+                                prevY = this.renderedChartData[lineIndex][i];
+                            }
+                        }
+                        if (y < prevY) {
+                            yr = prevY - this.anim.easeOutExpo(this.progress, 0, prevY - y, this.duration);
+                        } else {
+                            yr = this.anim.easeOutExpo(this.progress, prevY, y - prevY, this.duration);
+                        }
+                    } else {
+                        yr = y
+                    }
+                    if (this.renderedChartData[lineIndex] === undefined) {
+                        this.renderedChartData[lineIndex] = [yr];
+                    } else {
+                        this.renderedChartData[lineIndex][i] = yr;
+                    }
+                    this.ctx.lineTo(x, yr)
                 }
                 this.ctx.stroke();
-
-                // renderedChartData[lineIndex] = points;
             }
         }
     }
@@ -499,6 +575,7 @@ function() {
         constructor() {
             super();
 
+            this._currVisibilityFrame = null;
             this._moveIsActive = false;
             this._startStretchXPos = null;
             this._initProps = {};
@@ -541,7 +618,11 @@ function() {
             addEventListeners(this._leftStretch, 'mousedown touchstart', this._stretchMouseDownHandler.bind(this));
             addEventListeners(this._rightStretch, 'mousedown touchstart', this._stretchMouseDownHandler.bind(this));
 
-            this.whenVisibilityChanged(this.visibilityFrame)
+            this.whenVisibilityChanged(this._currVisibilityFrame || this.visibilityFrame)
+        }
+
+        getRightShift() {
+            return parseFloat(this.el.style.right) || 0;
         }
 
         _windowMouseMoveHandler(e) {
@@ -549,7 +630,6 @@ function() {
             if (e instanceof TouchEvent) {
                 x = e.changedTouches[0].screenX
             }
-
             let dist = this._startStretchXPos - x;
 
             if (this._moveIsActive) {
@@ -604,10 +684,6 @@ function() {
             this._initProps.left = this.el.offsetLeft;
         }
 
-        getRightShift() {
-            return parseFloat(this.el.style.right) || 0;
-        }
-
         _setProps({width, right}) {
             if (width) {
                 this.el.style.width = width;
@@ -615,30 +691,32 @@ function() {
             if (right) {
                 this.el.style.right = right;
             }
+            this._currVisibilityFrame = this.visibilityFrame;
+
             this.whenVisibilityChanged(this.visibilityFrame);
         }
 
         _move(dist) {
-            let newRight = this._initProps.right + dist;
+            let newRight = (this._initProps.right || 0) + dist;
 
-            if (newRight >= 0 && newRight <= this.parent.el.clientWidth - this._initProps.width) {
+            if (newRight >= 0 && newRight <= this.parent.el.clientWidth - (this._initProps.width || this.el.clientWidth)) {
                 this._setProps({right: newRight + 'px'});
             }
         }
 
         _moveLeftStretch(dist) {
-            let newWidth = this._initProps.width + dist;
+            let newWidth = (this._initProps.width || this.el.clientWidth) + dist;
 
-            if (newWidth >= 135 && newWidth <= this.parent.el.clientWidth - this._initProps.right) {
+            if (newWidth >= 135 && newWidth <= this.parent.el.clientWidth - (this._initProps.right || this.getRightShift())) {
                 this._setProps({width: newWidth + 'px'});
             }
         }
 
         _moveRightStretch(dist) {
-            let newRight = this._initProps.right + dist;
+            let newRight = (this._initProps.right || this.getRightShift()) + dist;
 
-            if (newRight >= 0 && this.parent.el.clientWidth - this._initProps.left - 135 >= newRight) {
-                let newWidth = this._initProps.width - dist;
+            if (newRight >= 0 && this.parent.el.clientWidth - (this._initProps.left || this.el.offsetLeft) - 135 >= newRight) {
+                let newWidth = (this._initProps.width || this.el.clientWidth) - dist;
 
                 this._setProps({
                     right: newRight + 'px',
@@ -648,19 +726,47 @@ function() {
         }
     }
 
+    class ZoomPlot extends CanvasHTMLComponent{
+        whenRendered(el, {chartData, opts}) {
+            let lineWidth = 1;
+
+            this.clear();
+
+            drawPlot(
+                {
+                    x: 0,
+                    y: lineWidth,
+                    width: this.el.clientWidth,
+                    height: this.el.clientHeight - lineWidth
+                },
+                chartData,
+                (points, lineIndex) => {
+                    this.ctx2d.beginPath();
+                    this.ctx2d.lineWidth = lineWidth;
+                    this.ctx2d.strokeStyle = chartData.colors[lineIndex];
+
+                    for (let i = 0; i < points.length; i++) {
+                        this.ctx2d.lineTo(points[i][0], points[i][1])
+                    }
+                    this.ctx2d.stroke();
+                }
+            );
+        }
+    }
+
     class Zoom extends HTMLComponent {
         NAME = 'zoom';
 
         constructor() {
             super();
 
-            this._plot = new CanvasHTMLComponent();
+            this._plot = new ZoomPlot();
             this._overlay = new CanvasHTMLComponent();
             this._zoomCarriage = new ZoomCarriage();
         }
 
         render({chartData, opts}) {
-            this._zoomCarriage.whenVisibilityChanged = this._whenVisibilityChanged.bind(this, opts);
+            this._zoomCarriage.whenVisibilityChanged = this._whenVisibilityChanged.bind(this);
 
             return `
                 ${this._plot.create(this, {chartData, opts})}
@@ -675,37 +781,13 @@ function() {
 
         whenVisibilityChanged(visibilityFrame) {}
 
-        _whenVisibilityChanged(opts, visibilityFrame) {
-            this._renderOverlay(opts);
+        _whenVisibilityChanged(visibilityFrame) {
+            this._renderOverlay();
 
             this.whenVisibilityChanged(visibilityFrame);
         }
 
-        whenRendered(el, {chartData, opts}) {
-            let lineWidth = 1;
-
-            drawPlot(
-                {
-                    x: 0,
-                    y: lineWidth,
-                    width: this._plot.el.clientWidth,
-                    height: this._plot.el.clientHeight - lineWidth
-                },
-                chartData,
-                function (points, lineIndex) {
-                    this._plot.ctx2d.beginPath();
-                    this._plot.ctx2d.lineWidth = lineWidth;
-                    this._plot.ctx2d.strokeStyle = chartData.colors[lineIndex];
-
-                    for (let i = 0; i < points.length; i++) {
-                        this._plot.ctx2d.lineTo(points[i][0], points[i][1])
-                    }
-                    this._plot.ctx2d.stroke();
-                }.bind(this)
-            );
-        }
-
-        _renderOverlay(opts) {
+        _renderOverlay() {
             this._overlay.clear();
 
             this._overlay.ctx2d.fillStyle = getColor('zoomOverlay');
@@ -798,7 +880,8 @@ function() {
         constructor() {
             super();
 
-            this._gridLayer = new GridLayer();
+            this._yAxisLayer = new YAxisLayer();
+            this._xAxisLayer = new XAxisLayer();
             this._plotLayer = new PlotLayer();
             this._infoLayer = new InfoLayer();
 
@@ -807,11 +890,34 @@ function() {
         }
 
         render({chartData, opts}) {
-            this._zoom.whenVisibilityChanged = this.whenVisibilityChanged.bind(this, chartData, opts);
+            let currVisibilityFrame,
+                visibilityChangedTimer,
+                lastVisibleChartData = {minY: null, maxY: null};
+
+            this._zoom.whenVisibilityChanged = (visibilityFrame) => {
+                currVisibilityFrame = visibilityFrame;
+
+                this._render(chartData, opts, lastVisibleChartData, visibilityFrame, false);
+
+                if (visibilityChangedTimer) {
+                    clearTimeout(visibilityChangedTimer);
+                }
+                visibilityChangedTimer = setTimeout(() => {
+                    this._render(chartData, opts, lastVisibleChartData, visibilityFrame, true, true)
+                }, 100);
+            };
+
+            this._legend.whenLegendItemStateChanged = (lineIndex, visible) => {
+                chartData.yDatas[lineIndex].visible = visible;
+
+                this._zoom._plot.rerender({chartData, opts: opts.zoom});
+                this._render(chartData, opts, lastVisibleChartData, currVisibilityFrame, true, true)
+            };
 
             return `
                 ${this._plotLayer.create(this, {chartData, opts})}
-                ${this._gridLayer.create(this, {chartData, opts})}
+                ${this._yAxisLayer.create(this, {chartData, opts})}
+                ${this._xAxisLayer.create(this, {chartData, opts})}
                 ${this._infoLayer.create(this, {chartData, opts})}
                 ${this._zoom.create(this, {chartData, opts: opts.zoom})}
                 ${this._legend.create(this, {chartData, opts})}
@@ -824,110 +930,62 @@ function() {
             });
         }
 
-        whenVisibilityChanged(chartData, opts, visibilityFrame) {
-            this._legend.whenLegendItemStateChanged = (lineIndex, visible) => {
-                chartData.yDatas[lineIndex].visible = visible;
-                this._zoom.rerender({chartData, opts: opts.zoom});
-                render.apply(this);
+        _render (chartData, opts, lastVisibleChartData, visibilityFrame, recalculateMinMaxY=true, animate=false) {
+            let xl = chartData.xData.length,
+            visibleXData = chartData.xData.slice(xl * visibilityFrame[0], xl * visibilityFrame[1]),
+            minMaxValX = minMax(visibleXData);
+
+            let visibleChartData = {
+                xData: visibleXData,
+                yDatas: [],
+                minValX: minMaxValX[0],
+                maxValX: minMaxValX[1],
+                minY: null,
+                maxY: null,
+                colors: [],
+                names: chartData.names
             };
-            render.apply(this);
 
-            function render () {
-                let xl = chartData.xData.length,
-                visibleXData = chartData.xData.slice(xl * visibilityFrame[0], xl * visibilityFrame[1]),
-                minMaxValX = minMax(visibleXData);
-
-                let visibleChartData = {
-                    xData: visibleXData,
-                    yDatas: [],
-                    minValX: minMaxValX[0],
-                    maxValX: minMaxValX[1],
-                    minValY: null,
-                    maxValY: null,
-                    colors: [],
-                    names: chartData.names
-                };
-
-                for (let lineIndex = 0, visibleData, pointsYLen; lineIndex < chartData.yDatas.length; lineIndex++) {
-                    if (chartData.yDatas[lineIndex].visible === false) {
-                        continue
-                    }
-                    visibleChartData.colors.push(chartData.colors[lineIndex]);
-
-                    pointsYLen = chartData.yDatas[lineIndex].length;
-                    visibleData = chartData.yDatas[lineIndex].slice(pointsYLen * visibilityFrame[0], pointsYLen * visibilityFrame[1]);
-                    visibleChartData.yDatas.push(visibleData);
-
-                    let mm = minMax(visibleData);
-                    visibleChartData.minValY = visibleChartData.minValY === null
-                        ? mm[0]
-                        : Math.min(visibleChartData.minValY, mm[0]);
-
-                    visibleChartData.maxValY = visibleChartData.maxValY === null
-                        ? mm[1]
-                        : Math.max(visibleChartData.maxValY, mm[1]);
+            for (let lineIndex = 0, visibleData, pointsYLen; lineIndex < chartData.yDatas.length; lineIndex++) {
+                if (chartData.yDatas[lineIndex].visible === false) {
+                    continue
                 }
+                visibleChartData.colors.push(chartData.colors[lineIndex]);
 
-                this._gridLayer.rerender({chartData: visibleChartData, opts});
-                this._plotLayer.rerender({chartData: visibleChartData, opts});
-                this._infoLayer.rerender({chartData: visibleChartData, opts});
+                pointsYLen = chartData.yDatas[lineIndex].length;
+                visibleData = chartData.yDatas[lineIndex].slice(
+                    pointsYLen * visibilityFrame[0],
+                    pointsYLen * visibilityFrame[1]
+                );
+                visibleChartData.yDatas.push(visibleData);
+
+                if (recalculateMinMaxY) {
+                    let mm = minMax(visibleData);
+                    visibleChartData.minY = visibleChartData.minY === null
+                        ? mm[0]
+                        : Math.min(visibleChartData.minY, mm[0]);
+
+                    visibleChartData.maxY = visibleChartData.maxY === null
+                        ? mm[1]
+                        : Math.max(visibleChartData.maxY, mm[1]);
+                }
             }
+
+            if (visibleChartData.minY == null) {
+                visibleChartData.minY = visibleChartData.minY || lastVisibleChartData.minY || chartData.minY;
+            }
+            if (visibleChartData.maxY == null) {
+                visibleChartData.maxY = visibleChartData.maxY || lastVisibleChartData.maxY || chartData.maxY;
+            }
+            lastVisibleChartData.minY = visibleChartData.minY;
+            lastVisibleChartData.maxY = visibleChartData.maxY;
+
+            this._yAxisLayer.rerender({chartData: visibleChartData, opts});
+            this._xAxisLayer.rerender({chartData: visibleChartData, opts});
+            this._plotLayer.rerender({chartData: visibleChartData, opts, animate});
+            this._infoLayer.rerender({chartData: visibleChartData, opts});
         }
     }
-
-    let requestAnimationFrame = window.requestAnimationFrame
-        || window.mozRequestAnimationFrame
-        ||  window.webkitRequestAnimationFrame
-        || window.msRequestAnimationFrame,
-
-        cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
-
-    let colorsMap = {
-        day: {
-            background: '#FFF',
-            yAxisNumbers: '#A1ACB3',
-            gridBottomBorder: '#cacccd',
-            gridLine: '#d4d6d7',
-            zoomOverlay: 'rgba(239,243,245,0.5)',
-            zoomCarriageTool: 'rgba(218,231,240,0.5)',
-            verticalInfoLine: '#CBCFD2',
-            pointsInfoBackground: '#FFF',
-            pointsInfoTitle: '#000',
-            legendItemBorder: '#EFF3F5',
-            legendItemName: '#000',
-        },
-        night: {
-            background: '#242F3E',
-            yAxisNumbers: '#546778',
-            gridBottomBorder: '#495564',
-            gridLine: '#303D4C',
-            zoomOverlay: 'rgba(27,36,48,0.5)',
-            zoomCarriageTool: 'rgba(81,101,120,0.5)',
-            verticalInfoLine: '#4e5a69',
-            pointsInfoBackground: '#253241',
-            pointsInfoTitle: '#FFF',
-            legendItemBorder: '#495564',
-            legendItemName: '#FFF',
-        }
-    };
-
-    /**
-     * @const {string}
-     */
-    let X_COLUMN_TYPE = 'x',
-        LINE_COLUMN_TYPE = 'line',
-        MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    let config = {
-        nightMode: false,
-        containerId: 'charts-container'
-    };
-
-    let rerender, fullrerender;
-
-    window.addEventListener('resize', function() {
-        fullrerender();
-    });
 
     return {
         configure: configure,
@@ -938,17 +996,6 @@ function() {
 
     function configure(val) {
         config = Object.assign(config, val);
-    }
-
-    function ChartDataType() {
-        this.xData = null;
-        this.yDatas = null;
-        this.names = null;
-        this.colors = null;
-        this.minValX = null;
-        this.maxValX = null;
-        this.minValY = null;
-        this.maxValY = null;
     }
 
     function setData(data) {
@@ -991,11 +1038,8 @@ function() {
         return config.nightMode ? colorsMap.night[name] : colorsMap.day[name]
     }
 
-    /**
-     * @returns {ChartDataType}
-     */
     function prepareChartData(chartData) {
-        let xData, yDatas = [], minMaxXData, minValY, maxValY, colors = [], names = [];
+        let xData, yDatas = [], minMaxXData, minY, maxY, colors = [], names = [];
 
         for (let columnIndex = 0; columnIndex < chartData.columns.length; columnIndex++) {
             let columnData = chartData.columns[columnIndex];
@@ -1025,8 +1069,8 @@ function() {
             } else {
                 let yData = columnData.slice(1); // remove column type from data
                 let minMaxYData = minMax(yData);
-                minValY = minValY === undefined ? minMaxYData[0]: Math.min(minValY, minMaxYData[0]);
-                maxValY = maxValY === undefined ? minMaxYData[1]: Math.max(maxValY, minMaxYData[1]);
+                minY = minY === undefined ? minMaxYData[0]: Math.min(minY, minMaxYData[0]);
+                maxY = maxY === undefined ? minMaxYData[1]: Math.max(maxY, minMaxYData[1]);
 
                 yDatas.push(yData);
                 // meta
@@ -1042,8 +1086,8 @@ function() {
             colors: colors,
             minValX: minMaxXData[0],
             maxValX: minMaxXData[1],
-            minValY: minValY,
-            maxValY: maxValY
+            minY: minY,
+            maxY: maxY
         }
     }
 
@@ -1070,7 +1114,7 @@ function() {
      * @param {Number} maxValX
      * @param {function} callback
      */
-    function cc(canvas, drawingFrame, data, minValX, maxValX, callback) {
+    function bypassXPoints(canvas, drawingFrame, data, minValX, maxValX, callback) {
         let width = canvas.clientWidth - drawingFrame.x + drawingFrame.width,
             compressionRatioX = width / (maxValX - minValX);
 
@@ -1083,12 +1127,12 @@ function() {
     /**
      * Draw the plot in the specific area somewhere you want
      * @param {{x: number, y: number, width: number, height: number}} areaMetric -
-     * @param {ChartDataType} chartData
+     * @param {Object} chartData
      * @param {function} drawingFunc
      */
     function drawPlot(areaMetric, chartData, drawingFunc) {
         let compressionRatioX = areaMetric.width / (chartData.maxValX - chartData.minValX),
-            compressionRatioY = areaMetric.height / (chartData.maxValY - chartData.minValY);
+            compressionRatioY = areaMetric.height / (chartData.maxY - chartData.minY);
 
         for (let lineIndex = 0, points; lineIndex < chartData.yDatas.length; lineIndex++) {
             if (chartData.yDatas[lineIndex].visible === false) {
@@ -1100,7 +1144,7 @@ function() {
                     areaMetric.x + (chartData.xData[yIndex] - chartData.minValX) * compressionRatioX,
                     // areaMetric.height - inversion by Y
                     areaMetric.y + areaMetric.height - (
-                        chartData.yDatas[lineIndex][yIndex] - chartData.minValY
+                        chartData.yDatas[lineIndex][yIndex] - chartData.minY
                     ) * compressionRatioY
                 ])
             }
@@ -1127,22 +1171,19 @@ function() {
             let startAnimTime;
 
             if (reqAnimId) {
-                // onFinishedCallback();
                 cancelAnimationFrame(reqAnimId);
             }
             reqAnimId = requestAnimationFrame(frame);
+            return this;
 
             function frame(timestamp) {
-                let isStarted = false;
-
                 if (!startAnimTime) {
-                    isStarted = true;
                     startAnimTime = timestamp;
                 }
                 context.progress = timestamp - startAnimTime;
                 context.duration = duration;
 
-                frameHandler.bind(context)(isStarted);
+                frameHandler.call(context);
 
                 if (context.progress < duration) {
                     reqAnimId = requestAnimationFrame(frame)
@@ -1151,7 +1192,6 @@ function() {
                     onFinishedCallback();
                 }
             }
-            return this;
         }
 
         function easeOutExpo (t, b, c, d) {
@@ -1173,17 +1213,17 @@ function() {
         return [min, max];
     }
 
-    function toHumanValue(val) {
-        if (val >= 1000000000) {
-            return Math.round(val / 1000000000) + 'G';
+    function toHumanValue(v) {
+        if (v >= 1000000000) {
+            return (v / 1000000000).toFixed(2) + 'G';
 
-        } else if (val >= 1000000) {
-            return Math.round(val / 1000000) + 'M';
+        } else if (v >= 1000000) {
+            return (v / 1000000).toFixed(2) + 'M';
 
-        } else if (val >= 1000) {
-            return Math.round(val / 1000) + 'K';
+        } else if (v >= 1000) {
+            return (v / 1000).toFixed(2) + 'K';
         }
-        return val > 0 ? Math.round(val) : val;
+        return v > 0 ? v.toFixed(2) : v;
     }
 
     function parentElementsHierarchy(e, parents = []) {
@@ -1194,5 +1234,4 @@ function() {
         }
         return parents
     }
-})
-();
+})();

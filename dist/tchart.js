@@ -33,6 +33,52 @@ function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = 
 function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
 
 var TChart = function () {
+  var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame,
+      cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
+  var colorsMap = {
+    day: {
+      background: '#FFF',
+      XYAxisLabels: '#A1ACB3',
+      gridBottomBorder: '#cacccd',
+      gridLine: '#d4d6d7',
+      zoomOverlay: 'rgba(239,243,245,0.5)',
+      zoomCarriageTool: 'rgba(218,231,240,0.5)',
+      verticalInfoLine: '#CBCFD2',
+      pointsInfoBackground: '#FFF',
+      pointsInfoTitle: '#000',
+      legendItemBorder: '#EFF3F5',
+      legendItemName: '#000'
+    },
+    night: {
+      background: '#242F3E',
+      XYAxisLabels: '#546778',
+      gridBottomBorder: '#495564',
+      gridLine: '#303D4C',
+      zoomOverlay: 'rgba(27,36,48,0.5)',
+      zoomCarriageTool: 'rgba(81,101,120,0.5)',
+      verticalInfoLine: '#4e5a69',
+      pointsInfoBackground: '#253241',
+      pointsInfoTitle: '#FFF',
+      legendItemBorder: '#495564',
+      legendItemName: '#FFF'
+    }
+  };
+  /**
+   * @const {string}
+   */
+
+  var X_COLUMN_TYPE = 'x',
+      LINE_COLUMN_TYPE = 'line',
+      MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var config = {
+    nightMode: false,
+    containerId: 'charts-container'
+  };
+  var rerender, fullrerender;
+  window.addEventListener('resize', function () {
+    fullrerender();
+  });
+
   function generateId() {
     return Math.random().toString(36).substr(2, 9);
   }
@@ -144,11 +190,7 @@ var TChart = function () {
       value: function _postCreate(data) {
         var _this = this;
 
-        this.el = document.getElementById(this._id); // TODO: null dom element
-
-        if (!this.el) {
-          return;
-        }
+        this.el = document.getElementById(this._id);
 
         this.rerender = function (newData) {
           data = newData || data;
@@ -172,19 +214,16 @@ var TChart = function () {
     }, {
       key: "_raiseEvent",
       value: function _raiseEvent(eventName, data) {
-        this._events.forEach(function (_ref3, index, object) {
+        this._events.forEach(function (_ref3) {
           var event = _ref3.event,
-              handler = _ref3.handler,
-              once = _ref3.once;
+              handler = _ref3.handler;
 
           if (event === eventName) {
             handler(data);
-
-            if (once) {
-              object.splice(index, 1);
-            }
           }
         });
+
+        this._events = [];
       }
     }, {
       key: "_wrap",
@@ -242,43 +281,93 @@ var TChart = function () {
     return CanvasHTMLComponent;
   }(HTMLComponent);
 
-  var GridLayer =
+  var XAxisLayer =
   /*#__PURE__*/
   function (_CanvasHTMLComponent) {
-    _inherits(GridLayer, _CanvasHTMLComponent);
+    _inherits(XAxisLayer, _CanvasHTMLComponent);
 
-    function GridLayer() {
-      var _this3;
+    function XAxisLayer() {
+      _classCallCheck(this, XAxisLayer);
 
-      _classCallCheck(this, GridLayer);
-
-      _this3 = _possibleConstructorReturn(this, _getPrototypeOf(GridLayer).call(this));
-      _this3._prevMaxValY = null;
-      _this3._anim = new Animation(_this3._frameAnimHandler);
-      return _this3;
+      return _possibleConstructorReturn(this, _getPrototypeOf(XAxisLayer).apply(this, arguments));
     }
 
-    _createClass(GridLayer, [{
+    _createClass(XAxisLayer, [{
       key: "whenCreated",
-      value: function whenCreated(el, _ref4) {
+      value: function whenCreated(el) {
+        _get(_getPrototypeOf(XAxisLayer.prototype), "whenCreated", this).call(this, el);
+
+        el.className = 'x-axis';
+      }
+    }, {
+      key: "whenRendered",
+      value: function whenRendered(el, _ref4) {
         var chartData = _ref4.chartData,
             opts = _ref4.opts;
+        this.clear();
 
-        _get(_getPrototypeOf(GridLayer.prototype), "whenCreated", this).call(this, el, {
-          chartData: chartData,
-          opts: opts
+        this._renderXAxisDates(chartData, opts);
+      }
+    }, {
+      key: "_renderXAxisDates",
+      value: function _renderXAxisDates(chartData, opts) {
+        var _this3 = this;
+
+        this.ctx2d.font = '.7em' + ' ' + 'Arial';
+        this.ctx2d.fillStyle = getColor('XYAxisLabels');
+        this.ctx2d.textBaseline = 'bottom';
+        var labelOccupiedWidth = 0;
+        bypassXPoints(this.el, opts.drawingFrame, chartData.xData, chartData.minValX, chartData.maxValX, function (v, x) {
+          var date = new Date(v),
+              label = MONTH_NAMES[date.getMonth()] + ' ' + date.getDate(),
+              labelWidth = _this3.ctx2d.measureText(label).width,
+              labelMidWidth = labelWidth / 2,
+              labelX = x - labelMidWidth,
+              labelXEnd = x + labelMidWidth;
+
+          if (labelOccupiedWidth <= labelX && x >= labelMidWidth && labelXEnd <= _this3.el.clientWidth) {
+            labelOccupiedWidth = labelXEnd + 15; // + 15 minimal distance between labels
+
+            _this3.ctx2d.fillText(label, labelX, _this3.el.clientHeight);
+          }
         });
+      }
+    }]);
 
-        el.className = 'grid';
+    return XAxisLayer;
+  }(CanvasHTMLComponent);
+
+  var YAxisLayer =
+  /*#__PURE__*/
+  function (_CanvasHTMLComponent2) {
+    _inherits(YAxisLayer, _CanvasHTMLComponent2);
+
+    function YAxisLayer() {
+      var _this4;
+
+      _classCallCheck(this, YAxisLayer);
+
+      _this4 = _possibleConstructorReturn(this, _getPrototypeOf(YAxisLayer).call(this));
+      _this4._prevMaxY = null;
+      _this4._anim = new Animation(_this4._frameAnimHandler);
+      return _this4;
+    }
+
+    _createClass(YAxisLayer, [{
+      key: "whenCreated",
+      value: function whenCreated(el) {
+        _get(_getPrototypeOf(YAxisLayer.prototype), "whenCreated", this).call(this, el);
+
+        el.className = 'y-axis';
       }
     }, {
       key: "whenRendered",
       value: function whenRendered(el, _ref5) {
-        var _this4 = this;
+        var _this5 = this;
 
         var chartData = _ref5.chartData,
             opts = _ref5.opts;
-        var increase = this._prevMaxValY === void 0 || chartData.maxValY > this._prevMaxValY ? true : chartData.maxValY === this._prevMaxValY ? undefined : false; // TODO: 0
+        var increase = this._prevMaxY === void 0 || chartData.maxY > this._prevMaxY ? true : chartData.maxY === this._prevMaxY ? undefined : false; // TODO: 0
 
         if (0 && increase === undefined) {
           return;
@@ -288,24 +377,21 @@ var TChart = function () {
           layer: this,
           anim: this._anim,
           ctx: this.ctx2d,
-          chartData: chartData,
           xData: chartData.xData,
-          opts: opts,
-          increase: increase,
-          minValY: chartData.minValY,
-          stepValY: (chartData.maxValY - chartData.minValY) / opts.yAxis.grid.horizontalLines,
+          minY: chartData.minY,
+          stepValY: (chartData.maxY - chartData.minY) / opts.yAxis.grid.horizontalLines,
           stepHrzLine: (this.el.clientHeight - opts.drawingFrame.y + opts.drawingFrame.height) / opts.yAxis.grid.horizontalLines,
-          duration: 1000,
-          maxShift: 40
+          maxShift: 40,
+          chartData: chartData,
+          opts: opts,
+          increase: increase
         }, 1000).onFinished(function () {
-          _this4._prevMaxValY = chartData.maxValY;
+          _this5._prevMaxY = chartData.maxY;
         });
       }
     }, {
-      key: "_frameAnimHandler",
-      value: function _frameAnimHandler() {
-        this.layer.clear();
-
+      key: "_renderXYAxisLabels",
+      value: function _renderXYAxisLabels() {
         for (var i = 0, initY, animY; i < this.opts.yAxis.grid.horizontalLines; i++) {
           initY = (i + 1) * this.stepHrzLine - 1;
 
@@ -325,29 +411,20 @@ var TChart = function () {
           this.ctx.stroke();
           this.ctx.textBaseline = 'top';
           this.ctx.font = '.7em' + ' ' + 'Arial';
-          this.ctx.fillStyle = getColor('yAxisNumbers');
-          this.ctx.fillText(toHumanValue(this.minValY + this.stepValY * (this.opts.yAxis.grid.horizontalLines - 1 - i)), 0, animY - 15 + this.opts.drawingFrame.y);
+          this.ctx.fillStyle = getColor('XYAxisLabels');
+          this.ctx.fillText(toHumanValue(this.minY + this.stepValY * (this.opts.yAxis.grid.horizontalLines - 1 - i)), 0, animY - 15 + this.opts.drawingFrame.y);
         }
+      }
+    }, {
+      key: "_frameAnimHandler",
+      value: function _frameAnimHandler() {
+        this.layer.clear();
 
-        this.ctx.textBaseline = 'bottom';
-        var labelOccupiedWidth = 0;
-        cc(this.layer.el, this.opts.drawingFrame, this.chartData.xData, this.chartData.minValX, this.chartData.maxValX, function (val, x) {
-          var date = new Date(val),
-              label = MONTH_NAMES[date.getMonth()] + ' ' + date.getDate(),
-              labelWidth = this.ctx.measureText(label).width,
-              labelMidWidth = labelWidth / 2,
-              labelX = x - labelMidWidth;
-
-          if (labelOccupiedWidth <= labelX && x >= labelMidWidth && x + labelMidWidth <= this.layer.el.clientWidth) {
-            labelOccupiedWidth = labelX + labelWidth + 15; // + 15 minimal distance between labels
-
-            this.ctx.fillText(label, labelX, this.layer.el.clientHeight);
-          }
-        }.bind(this));
+        this.layer._renderXYAxisLabels.call(this);
       }
     }]);
 
-    return GridLayer;
+    return YAxisLayer;
   }(CanvasHTMLComponent);
 
   var PointsInfoHTMLComponent =
@@ -356,18 +433,18 @@ var TChart = function () {
     _inherits(PointsInfoHTMLComponent, _HTMLComponent2);
 
     function PointsInfoHTMLComponent() {
-      var _this5;
+      var _this6;
 
       _classCallCheck(this, PointsInfoHTMLComponent);
 
-      _this5 = _possibleConstructorReturn(this, _getPrototypeOf(PointsInfoHTMLComponent).call(this));
+      _this6 = _possibleConstructorReturn(this, _getPrototypeOf(PointsInfoHTMLComponent).call(this));
 
-      _defineProperty(_assertThisInitialized(_this5), "NAME", 'points-info');
+      _defineProperty(_assertThisInitialized(_this6), "NAME", 'points-info');
 
-      _defineProperty(_assertThisInitialized(_this5), "DAY_NAMES", ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+      _defineProperty(_assertThisInitialized(_this6), "DAY_NAMES", ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
 
-      _this5._values = [];
-      return _this5;
+      _this6._values = [];
+      return _this6;
     }
 
     _createClass(PointsInfoHTMLComponent, [{
@@ -431,24 +508,24 @@ var TChart = function () {
 
   var InfoLayer =
   /*#__PURE__*/
-  function (_CanvasHTMLComponent2) {
-    _inherits(InfoLayer, _CanvasHTMLComponent2);
+  function (_CanvasHTMLComponent3) {
+    _inherits(InfoLayer, _CanvasHTMLComponent3);
 
     function InfoLayer() {
-      var _this6;
+      var _this7;
 
       _classCallCheck(this, InfoLayer);
 
-      _this6 = _possibleConstructorReturn(this, _getPrototypeOf(InfoLayer).call(this));
-      _this6._chartData = null;
-      _this6._pointsInfo = new PointsInfoHTMLComponent();
-      return _this6;
+      _this7 = _possibleConstructorReturn(this, _getPrototypeOf(InfoLayer).call(this));
+      _this7._chartData = null;
+      _this7._pointsInfo = new PointsInfoHTMLComponent();
+      return _this7;
     }
 
     _createClass(InfoLayer, [{
       key: "whenCreated",
       value: function whenCreated(el, _ref10) {
-        var _this7 = this;
+        var _this8 = this;
 
         var chartData = _ref10.chartData,
             opts = _ref10.opts;
@@ -463,10 +540,10 @@ var TChart = function () {
         this._pointsInfo.onMouseOut = function (e) {
           e.stopPropagation();
 
-          if (e.relatedTarget && !parentElementsHierarchy(e.relatedTarget).includes(_this7._pointsInfo.el)) {
-            _this7.clear();
+          if (e.relatedTarget && !parentElementsHierarchy(e.relatedTarget).includes(_this8._pointsInfo.el)) {
+            _this8.clear();
 
-            _this7._pointsInfo.remove();
+            _this8._pointsInfo.remove();
           }
         };
       }
@@ -564,17 +641,18 @@ var TChart = function () {
 
   var PlotLayer =
   /*#__PURE__*/
-  function (_CanvasHTMLComponent3) {
-    _inherits(PlotLayer, _CanvasHTMLComponent3);
+  function (_CanvasHTMLComponent4) {
+    _inherits(PlotLayer, _CanvasHTMLComponent4);
 
     function PlotLayer() {
-      var _this8;
+      var _this9;
 
       _classCallCheck(this, PlotLayer);
 
-      _this8 = _possibleConstructorReturn(this, _getPrototypeOf(PlotLayer).call(this));
-      _this8._anim = new Animation(_this8._frameAnimHandler);
-      return _this8;
+      _this9 = _possibleConstructorReturn(this, _getPrototypeOf(PlotLayer).call(this));
+      _this9.renderedChartData = [];
+      _this9._anim = new Animation(_this9._frameAnimHandler);
+      return _this9;
     }
 
     _createClass(PlotLayer, [{
@@ -588,16 +666,18 @@ var TChart = function () {
       key: "whenRendered",
       value: function whenRendered(el, _ref12) {
         var chartData = _ref12.chartData,
-            opts = _ref12.opts;
+            opts = _ref12.opts,
+            animate = _ref12.animate;
 
         this._anim.start({
+          renderedChartData: this.renderedChartData,
+          anim: this._anim,
           ctx: this.ctx2d,
           layer: this,
           chartData: chartData,
-          opts: opts
-        }, 1000).onFinished(function () {// renderedChartData = [];
-          // prevChartData = chartData;
-        });
+          opts: opts,
+          animate: animate
+        }, 800);
       }
     }, {
       key: "_frameAnimHandler",
@@ -618,23 +698,37 @@ var TChart = function () {
 
           for (var i = 0, x, y; i < points.length; i++) {
             x = points[i][0];
-            y = points[i][1]; // let prevYVal = 0;
-            // if (renderedChartData[lineIndex]) {
-            //     if (renderedChartData[lineIndex][i]) {
-            //         // prevYVal = renderedChartData[lineIndex][i][1];
-            //     }
-            // }
-            // let yr;
-            // if (y < prevYVal) {
-            //     yr = prevYVal - anim.easeOutExpo(self.progress, 0, prevYVal - y, self.duration);
-            // } else {
-            //     yr = anim.easeOutExpo(self.progress, prevYVal, y - prevYVal, self.duration);
-            // }
+            y = points[i][1];
+            var yr = void 0;
 
-            this.ctx.lineTo(x, y);
+            if (this.animate) {
+              var prevY = 0;
+
+              if (this.renderedChartData[lineIndex] !== undefined) {
+                if (this.renderedChartData[lineIndex][i] !== undefined) {
+                  prevY = this.renderedChartData[lineIndex][i];
+                }
+              }
+
+              if (y < prevY) {
+                yr = prevY - this.anim.easeOutExpo(this.progress, 0, prevY - y, this.duration);
+              } else {
+                yr = this.anim.easeOutExpo(this.progress, prevY, y - prevY, this.duration);
+              }
+            } else {
+              yr = y;
+            }
+
+            if (this.renderedChartData[lineIndex] === undefined) {
+              this.renderedChartData[lineIndex] = [yr];
+            } else {
+              this.renderedChartData[lineIndex][i] = yr;
+            }
+
+            this.ctx.lineTo(x, yr);
           }
 
-          this.ctx.stroke(); // renderedChartData[lineIndex] = points;
+          this.ctx.stroke();
         }
       }
     }]);
@@ -648,22 +742,23 @@ var TChart = function () {
     _inherits(ZoomCarriage, _HTMLComponent3);
 
     function ZoomCarriage() {
-      var _this9;
+      var _this10;
 
       _classCallCheck(this, ZoomCarriage);
 
-      _this9 = _possibleConstructorReturn(this, _getPrototypeOf(ZoomCarriage).call(this));
+      _this10 = _possibleConstructorReturn(this, _getPrototypeOf(ZoomCarriage).call(this));
 
-      _defineProperty(_assertThisInitialized(_this9), "NAME", 'zoom-carriage');
+      _defineProperty(_assertThisInitialized(_this10), "NAME", 'zoom-carriage');
 
-      _this9._moveIsActive = false;
-      _this9._startStretchXPos = null;
-      _this9._initProps = {};
-      _this9._leftStretch = null;
-      _this9._rightStretch = null;
-      _this9._leftStretchIsActive = false;
-      _this9._rightStretchIsActive = false;
-      return _this9;
+      _this10._currVisibilityFrame = null;
+      _this10._moveIsActive = false;
+      _this10._startStretchXPos = null;
+      _this10._initProps = {};
+      _this10._leftStretch = null;
+      _this10._rightStretch = null;
+      _this10._leftStretchIsActive = false;
+      _this10._rightStretchIsActive = false;
+      return _this10;
     }
 
     _createClass(ZoomCarriage, [{
@@ -690,7 +785,12 @@ var TChart = function () {
         addEventListeners(el, 'mousedown touchstart', this._mouseDownHandler.bind(this));
         addEventListeners(this._leftStretch, 'mousedown touchstart', this._stretchMouseDownHandler.bind(this));
         addEventListeners(this._rightStretch, 'mousedown touchstart', this._stretchMouseDownHandler.bind(this));
-        this.whenVisibilityChanged(this.visibilityFrame);
+        this.whenVisibilityChanged(this._currVisibilityFrame || this.visibilityFrame);
+      }
+    }, {
+      key: "getRightShift",
+      value: function getRightShift() {
+        return parseFloat(this.el.style.right) || 0;
       }
     }, {
       key: "_windowMouseMoveHandler",
@@ -763,11 +863,6 @@ var TChart = function () {
         this._initProps.left = this.el.offsetLeft;
       }
     }, {
-      key: "getRightShift",
-      value: function getRightShift() {
-        return parseFloat(this.el.style.right) || 0;
-      }
-    }, {
       key: "_setProps",
       value: function _setProps(_ref14) {
         var width = _ref14.width,
@@ -781,14 +876,15 @@ var TChart = function () {
           this.el.style.right = right;
         }
 
+        this._currVisibilityFrame = this.visibilityFrame;
         this.whenVisibilityChanged(this.visibilityFrame);
       }
     }, {
       key: "_move",
       value: function _move(dist) {
-        var newRight = this._initProps.right + dist;
+        var newRight = (this._initProps.right || 0) + dist;
 
-        if (newRight >= 0 && newRight <= this.parent.el.clientWidth - this._initProps.width) {
+        if (newRight >= 0 && newRight <= this.parent.el.clientWidth - (this._initProps.width || this.el.clientWidth)) {
           this._setProps({
             right: newRight + 'px'
           });
@@ -797,9 +893,9 @@ var TChart = function () {
     }, {
       key: "_moveLeftStretch",
       value: function _moveLeftStretch(dist) {
-        var newWidth = this._initProps.width + dist;
+        var newWidth = (this._initProps.width || this.el.clientWidth) + dist;
 
-        if (newWidth >= 135 && newWidth <= this.parent.el.clientWidth - this._initProps.right) {
+        if (newWidth >= 135 && newWidth <= this.parent.el.clientWidth - (this._initProps.right || this.getRightShift())) {
           this._setProps({
             width: newWidth + 'px'
           });
@@ -808,10 +904,10 @@ var TChart = function () {
     }, {
       key: "_moveRightStretch",
       value: function _moveRightStretch(dist) {
-        var newRight = this._initProps.right + dist;
+        var newRight = (this._initProps.right || this.getRightShift()) + dist;
 
-        if (newRight >= 0 && this.parent.el.clientWidth - this._initProps.left - 135 >= newRight) {
-          var newWidth = this._initProps.width - dist;
+        if (newRight >= 0 && this.parent.el.clientWidth - (this._initProps.left || this.el.offsetLeft) - 135 >= newRight) {
+          var newWidth = (this._initProps.width || this.el.clientWidth) - dist;
 
           this._setProps({
             right: newRight + 'px',
@@ -831,32 +927,75 @@ var TChart = function () {
     return ZoomCarriage;
   }(HTMLComponent);
 
+  var ZoomPlot =
+  /*#__PURE__*/
+  function (_CanvasHTMLComponent5) {
+    _inherits(ZoomPlot, _CanvasHTMLComponent5);
+
+    function ZoomPlot() {
+      _classCallCheck(this, ZoomPlot);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(ZoomPlot).apply(this, arguments));
+    }
+
+    _createClass(ZoomPlot, [{
+      key: "whenRendered",
+      value: function whenRendered(el, _ref15) {
+        var _this11 = this;
+
+        var chartData = _ref15.chartData,
+            opts = _ref15.opts;
+        var lineWidth = 1;
+        this.clear();
+        drawPlot({
+          x: 0,
+          y: lineWidth,
+          width: this.el.clientWidth,
+          height: this.el.clientHeight - lineWidth
+        }, chartData, function (points, lineIndex) {
+          _this11.ctx2d.beginPath();
+
+          _this11.ctx2d.lineWidth = lineWidth;
+          _this11.ctx2d.strokeStyle = chartData.colors[lineIndex];
+
+          for (var i = 0; i < points.length; i++) {
+            _this11.ctx2d.lineTo(points[i][0], points[i][1]);
+          }
+
+          _this11.ctx2d.stroke();
+        });
+      }
+    }]);
+
+    return ZoomPlot;
+  }(CanvasHTMLComponent);
+
   var Zoom =
   /*#__PURE__*/
   function (_HTMLComponent4) {
     _inherits(Zoom, _HTMLComponent4);
 
     function Zoom() {
-      var _this10;
+      var _this12;
 
       _classCallCheck(this, Zoom);
 
-      _this10 = _possibleConstructorReturn(this, _getPrototypeOf(Zoom).call(this));
+      _this12 = _possibleConstructorReturn(this, _getPrototypeOf(Zoom).call(this));
 
-      _defineProperty(_assertThisInitialized(_this10), "NAME", 'zoom');
+      _defineProperty(_assertThisInitialized(_this12), "NAME", 'zoom');
 
-      _this10._plot = new CanvasHTMLComponent();
-      _this10._overlay = new CanvasHTMLComponent();
-      _this10._zoomCarriage = new ZoomCarriage();
-      return _this10;
+      _this12._plot = new ZoomPlot();
+      _this12._overlay = new CanvasHTMLComponent();
+      _this12._zoomCarriage = new ZoomCarriage();
+      return _this12;
     }
 
     _createClass(Zoom, [{
       key: "render",
-      value: function render(_ref15) {
-        var chartData = _ref15.chartData,
-            opts = _ref15.opts;
-        this._zoomCarriage.whenVisibilityChanged = this._whenVisibilityChanged.bind(this, opts);
+      value: function render(_ref16) {
+        var chartData = _ref16.chartData,
+            opts = _ref16.opts;
+        this._zoomCarriage.whenVisibilityChanged = this._whenVisibilityChanged.bind(this);
         return "\n                ".concat(this._plot.create(this, {
           chartData: chartData,
           opts: opts
@@ -873,38 +1012,14 @@ var TChart = function () {
       value: function whenVisibilityChanged(visibilityFrame) {}
     }, {
       key: "_whenVisibilityChanged",
-      value: function _whenVisibilityChanged(opts, visibilityFrame) {
-        this._renderOverlay(opts);
+      value: function _whenVisibilityChanged(visibilityFrame) {
+        this._renderOverlay();
 
         this.whenVisibilityChanged(visibilityFrame);
       }
     }, {
-      key: "whenRendered",
-      value: function whenRendered(el, _ref16) {
-        var chartData = _ref16.chartData,
-            opts = _ref16.opts;
-        var lineWidth = 1;
-        drawPlot({
-          x: 0,
-          y: lineWidth,
-          width: this._plot.el.clientWidth,
-          height: this._plot.el.clientHeight - lineWidth
-        }, chartData, function (points, lineIndex) {
-          this._plot.ctx2d.beginPath();
-
-          this._plot.ctx2d.lineWidth = lineWidth;
-          this._plot.ctx2d.strokeStyle = chartData.colors[lineIndex];
-
-          for (var i = 0; i < points.length; i++) {
-            this._plot.ctx2d.lineTo(points[i][0], points[i][1]);
-          }
-
-          this._plot.ctx2d.stroke();
-        }.bind(this));
-      }
-    }, {
       key: "_renderOverlay",
-      value: function _renderOverlay(opts) {
+      value: function _renderOverlay() {
         this._overlay.clear();
 
         this._overlay.ctx2d.fillStyle = getColor('zoomOverlay');
@@ -931,17 +1046,17 @@ var TChart = function () {
     _inherits(LegendItem, _HTMLComponent5);
 
     function LegendItem() {
-      var _this11;
+      var _this13;
 
       _classCallCheck(this, LegendItem);
 
-      _this11 = _possibleConstructorReturn(this, _getPrototypeOf(LegendItem).call(this));
+      _this13 = _possibleConstructorReturn(this, _getPrototypeOf(LegendItem).call(this));
 
-      _defineProperty(_assertThisInitialized(_this11), "NAME", 'li');
+      _defineProperty(_assertThisInitialized(_this13), "NAME", 'li');
 
-      _this11._lineIndex = null;
-      _this11._visible = true;
-      return _this11;
+      _this13._lineIndex = null;
+      _this13._visible = true;
+      return _this13;
     }
 
     _createClass(LegendItem, [{
@@ -970,15 +1085,15 @@ var TChart = function () {
     }, {
       key: "whenCreated",
       value: function whenCreated(el) {
-        var _this12 = this;
+        var _this14 = this;
 
         el.style.borderColor = getColor('legendItemBorder');
         el.addEventListener('click', function () {
-          _this12._visible = !_this12._visible;
+          _this14._visible = !_this14._visible;
 
-          _this12.rerender();
+          _this14.rerender();
 
-          _this12.whenStateChanged(_this12._lineIndex, _this12._visible);
+          _this14.whenStateChanged(_this14._lineIndex, _this14._visible);
         });
       }
     }]);
@@ -992,22 +1107,22 @@ var TChart = function () {
     _inherits(Legend, _HTMLComponent6);
 
     function Legend() {
-      var _this13;
+      var _this15;
 
       _classCallCheck(this, Legend);
 
-      _this13 = _possibleConstructorReturn(this, _getPrototypeOf(Legend).call(this));
+      _this15 = _possibleConstructorReturn(this, _getPrototypeOf(Legend).call(this));
 
-      _defineProperty(_assertThisInitialized(_this13), "NAME", 'ul');
+      _defineProperty(_assertThisInitialized(_this15), "NAME", 'ul');
 
-      _this13._lines = [];
-      return _this13;
+      _this15._lines = [];
+      return _this15;
     }
 
     _createClass(Legend, [{
       key: "render",
       value: function render(_ref18) {
-        var _this14 = this;
+        var _this16 = this;
 
         var chartData = _ref18.chartData,
             opts = _ref18.opts;
@@ -1015,8 +1130,8 @@ var TChart = function () {
           var name = _ref19.name,
               color = _ref19.color;
           var legendItem = new LegendItem();
-          legendItem.whenStateChanged = _this14.whenLegendItemStateChanged;
-          return legendItem.create(_this14, {
+          legendItem.whenStateChanged = _this16.whenLegendItemStateChanged;
+          return legendItem.create(_this16, {
             name: name,
             color: color,
             lineIndex: lineIndex
@@ -1056,32 +1171,69 @@ var TChart = function () {
     _inherits(Chart, _HTMLComponent7);
 
     function Chart() {
-      var _this15;
+      var _this17;
 
       _classCallCheck(this, Chart);
 
-      _this15 = _possibleConstructorReturn(this, _getPrototypeOf(Chart).call(this));
+      _this17 = _possibleConstructorReturn(this, _getPrototypeOf(Chart).call(this));
 
-      _defineProperty(_assertThisInitialized(_this15), "NAME", 'chart');
+      _defineProperty(_assertThisInitialized(_this17), "NAME", 'chart');
 
-      _this15._gridLayer = new GridLayer();
-      _this15._plotLayer = new PlotLayer();
-      _this15._infoLayer = new InfoLayer();
-      _this15._zoom = new Zoom();
-      _this15._legend = new Legend();
-      return _this15;
+      _this17._yAxisLayer = new YAxisLayer();
+      _this17._xAxisLayer = new XAxisLayer();
+      _this17._plotLayer = new PlotLayer();
+      _this17._infoLayer = new InfoLayer();
+      _this17._zoom = new Zoom();
+      _this17._legend = new Legend();
+      return _this17;
     }
 
     _createClass(Chart, [{
       key: "render",
       value: function render(_ref22) {
+        var _this18 = this;
+
         var chartData = _ref22.chartData,
             opts = _ref22.opts;
-        this._zoom.whenVisibilityChanged = this.whenVisibilityChanged.bind(this, chartData, opts);
+        var currVisibilityFrame,
+            visibilityChangedTimer,
+            lastVisibleChartData = {
+          minY: null,
+          maxY: null
+        };
+
+        this._zoom.whenVisibilityChanged = function (visibilityFrame) {
+          currVisibilityFrame = visibilityFrame;
+
+          _this18._render(chartData, opts, lastVisibleChartData, visibilityFrame, false);
+
+          if (visibilityChangedTimer) {
+            clearTimeout(visibilityChangedTimer);
+          }
+
+          visibilityChangedTimer = setTimeout(function () {
+            _this18._render(chartData, opts, lastVisibleChartData, visibilityFrame, true, true);
+          }, 100);
+        };
+
+        this._legend.whenLegendItemStateChanged = function (lineIndex, visible) {
+          chartData.yDatas[lineIndex].visible = visible;
+
+          _this18._zoom._plot.rerender({
+            chartData: chartData,
+            opts: opts.zoom
+          });
+
+          _this18._render(chartData, opts, lastVisibleChartData, currVisibilityFrame, true, true);
+        };
+
         return "\n                ".concat(this._plotLayer.create(this, {
           chartData: chartData,
           opts: opts
-        }), "\n                ").concat(this._gridLayer.create(this, {
+        }), "\n                ").concat(this._yAxisLayer.create(this, {
+          chartData: chartData,
+          opts: opts
+        }), "\n                ").concat(this._xAxisLayer.create(this, {
           chartData: chartData,
           opts: opts
         }), "\n                ").concat(this._infoLayer.create(this, {
@@ -1098,129 +1250,89 @@ var TChart = function () {
     }, {
       key: "whenCreated",
       value: function whenCreated(el, _ref23) {
-        var _this16 = this;
+        var _this19 = this;
 
         var chartData = _ref23.chartData;
         chartData.names.forEach(function (name, i) {
-          _this16._legend.addLine({
+          _this19._legend.addLine({
             name: name,
             color: chartData.colors[i]
           });
         });
       }
     }, {
-      key: "whenVisibilityChanged",
-      value: function whenVisibilityChanged(chartData, opts, visibilityFrame) {
-        var _this17 = this;
-
-        this._legend.whenLegendItemStateChanged = function (lineIndex, visible) {
-          chartData.yDatas[lineIndex].visible = visible;
-
-          _this17._zoom.rerender({
-            chartData: chartData,
-            opts: opts.zoom
-          });
-
-          render.apply(_this17);
+      key: "_render",
+      value: function _render(chartData, opts, lastVisibleChartData, visibilityFrame) {
+        var recalculateMinMaxY = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : true;
+        var animate = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : false;
+        var xl = chartData.xData.length,
+            visibleXData = chartData.xData.slice(xl * visibilityFrame[0], xl * visibilityFrame[1]),
+            minMaxValX = minMax(visibleXData);
+        var visibleChartData = {
+          xData: visibleXData,
+          yDatas: [],
+          minValX: minMaxValX[0],
+          maxValX: minMaxValX[1],
+          minY: null,
+          maxY: null,
+          colors: [],
+          names: chartData.names
         };
 
-        render.apply(this);
-
-        function render() {
-          var xl = chartData.xData.length,
-              visibleXData = chartData.xData.slice(xl * visibilityFrame[0], xl * visibilityFrame[1]),
-              minMaxValX = minMax(visibleXData);
-          var visibleChartData = {
-            xData: visibleXData,
-            yDatas: [],
-            minValX: minMaxValX[0],
-            maxValX: minMaxValX[1],
-            minValY: null,
-            maxValY: null,
-            colors: [],
-            names: chartData.names
-          };
-
-          for (var lineIndex = 0, visibleData, pointsYLen; lineIndex < chartData.yDatas.length; lineIndex++) {
-            if (chartData.yDatas[lineIndex].visible === false) {
-              continue;
-            }
-
-            visibleChartData.colors.push(chartData.colors[lineIndex]);
-            pointsYLen = chartData.yDatas[lineIndex].length;
-            visibleData = chartData.yDatas[lineIndex].slice(pointsYLen * visibilityFrame[0], pointsYLen * visibilityFrame[1]);
-            visibleChartData.yDatas.push(visibleData);
-            var mm = minMax(visibleData);
-            visibleChartData.minValY = visibleChartData.minValY === null ? mm[0] : Math.min(visibleChartData.minValY, mm[0]);
-            visibleChartData.maxValY = visibleChartData.maxValY === null ? mm[1] : Math.max(visibleChartData.maxValY, mm[1]);
+        for (var lineIndex = 0, visibleData, pointsYLen; lineIndex < chartData.yDatas.length; lineIndex++) {
+          if (chartData.yDatas[lineIndex].visible === false) {
+            continue;
           }
 
-          this._gridLayer.rerender({
-            chartData: visibleChartData,
-            opts: opts
-          });
+          visibleChartData.colors.push(chartData.colors[lineIndex]);
+          pointsYLen = chartData.yDatas[lineIndex].length;
+          visibleData = chartData.yDatas[lineIndex].slice(pointsYLen * visibilityFrame[0], pointsYLen * visibilityFrame[1]);
+          visibleChartData.yDatas.push(visibleData);
 
-          this._plotLayer.rerender({
-            chartData: visibleChartData,
-            opts: opts
-          });
-
-          this._infoLayer.rerender({
-            chartData: visibleChartData,
-            opts: opts
-          });
+          if (recalculateMinMaxY) {
+            var mm = minMax(visibleData);
+            visibleChartData.minY = visibleChartData.minY === null ? mm[0] : Math.min(visibleChartData.minY, mm[0]);
+            visibleChartData.maxY = visibleChartData.maxY === null ? mm[1] : Math.max(visibleChartData.maxY, mm[1]);
+          }
         }
+
+        if (visibleChartData.minY == null) {
+          visibleChartData.minY = visibleChartData.minY || lastVisibleChartData.minY || chartData.minY;
+        }
+
+        if (visibleChartData.maxY == null) {
+          visibleChartData.maxY = visibleChartData.maxY || lastVisibleChartData.maxY || chartData.maxY;
+        }
+
+        lastVisibleChartData.minY = visibleChartData.minY;
+        lastVisibleChartData.maxY = visibleChartData.maxY;
+
+        this._yAxisLayer.rerender({
+          chartData: visibleChartData,
+          opts: opts
+        });
+
+        this._xAxisLayer.rerender({
+          chartData: visibleChartData,
+          opts: opts
+        });
+
+        this._plotLayer.rerender({
+          chartData: visibleChartData,
+          opts: opts,
+          animate: animate
+        });
+
+        this._infoLayer.rerender({
+          chartData: visibleChartData,
+          opts: opts
+        });
       }
     }]);
 
     return Chart;
   }(HTMLComponent);
 
-  var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame,
-      cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
-  var colorsMap = {
-    day: {
-      background: '#FFF',
-      yAxisNumbers: '#A1ACB3',
-      gridBottomBorder: '#cacccd',
-      gridLine: '#d4d6d7',
-      zoomOverlay: 'rgba(239,243,245,0.5)',
-      zoomCarriageTool: 'rgba(218,231,240,0.5)',
-      verticalInfoLine: '#CBCFD2',
-      pointsInfoBackground: '#FFF',
-      pointsInfoTitle: '#000',
-      legendItemBorder: '#EFF3F5',
-      legendItemName: '#000'
-    },
-    night: {
-      background: '#242F3E',
-      yAxisNumbers: '#546778',
-      gridBottomBorder: '#495564',
-      gridLine: '#303D4C',
-      zoomOverlay: 'rgba(27,36,48,0.5)',
-      zoomCarriageTool: 'rgba(81,101,120,0.5)',
-      verticalInfoLine: '#4e5a69',
-      pointsInfoBackground: '#253241',
-      pointsInfoTitle: '#FFF',
-      legendItemBorder: '#495564',
-      legendItemName: '#FFF'
-    }
-  };
-  /**
-   * @const {string}
-   */
-
-  var X_COLUMN_TYPE = 'x',
-      LINE_COLUMN_TYPE = 'line',
-      MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  var config = {
-    nightMode: false,
-    containerId: 'charts-container'
-  };
-  var rerender, fullrerender;
-  window.addEventListener('resize', function () {
-    fullrerender();
-  });
   return {
     configure: configure,
     setData: setData,
@@ -1230,17 +1342,6 @@ var TChart = function () {
 
   function configure(val) {
     config = Object.assign(config, val);
-  }
-
-  function ChartDataType() {
-    this.xData = null;
-    this.yDatas = null;
-    this.names = null;
-    this.colors = null;
-    this.minValX = null;
-    this.maxValX = null;
-    this.minValY = null;
-    this.maxValY = null;
   }
 
   function setData(data) {
@@ -1283,17 +1384,13 @@ var TChart = function () {
   function getColor(name) {
     return config.nightMode ? colorsMap.night[name] : colorsMap.day[name];
   }
-  /**
-   * @returns {ChartDataType}
-   */
-
 
   function prepareChartData(chartData) {
     var xData,
         yDatas = [],
         minMaxXData,
-        minValY,
-        maxValY,
+        minY,
+        maxY,
         colors = [],
         names = [];
 
@@ -1331,8 +1428,8 @@ var TChart = function () {
         var yData = columnData.slice(1); // remove column type from data
 
         var minMaxYData = minMax(yData);
-        minValY = minValY === undefined ? minMaxYData[0] : Math.min(minValY, minMaxYData[0]);
-        maxValY = maxValY === undefined ? minMaxYData[1] : Math.max(maxValY, minMaxYData[1]);
+        minY = minY === undefined ? minMaxYData[0] : Math.min(minY, minMaxYData[0]);
+        maxY = maxY === undefined ? minMaxYData[1] : Math.max(maxY, minMaxYData[1]);
         yDatas.push(yData); // meta
 
         colors.push(chartData.colors[columnName]);
@@ -1347,8 +1444,8 @@ var TChart = function () {
       colors: colors,
       minValX: minMaxXData[0],
       maxValX: minMaxXData[1],
-      minValY: minValY,
-      maxValY: maxValY
+      minY: minY,
+      maxY: maxY
     };
   }
 
@@ -1379,7 +1476,7 @@ var TChart = function () {
    */
 
 
-  function cc(canvas, drawingFrame, data, minValX, maxValX, callback) {
+  function bypassXPoints(canvas, drawingFrame, data, minValX, maxValX, callback) {
     var width = canvas.clientWidth - drawingFrame.x + drawingFrame.width,
         compressionRatioX = width / (maxValX - minValX);
 
@@ -1391,14 +1488,14 @@ var TChart = function () {
   /**
    * Draw the plot in the specific area somewhere you want
    * @param {{x: number, y: number, width: number, height: number}} areaMetric -
-   * @param {ChartDataType} chartData
+   * @param {Object} chartData
    * @param {function} drawingFunc
    */
 
 
   function drawPlot(areaMetric, chartData, drawingFunc) {
     var compressionRatioX = areaMetric.width / (chartData.maxValX - chartData.minValX),
-        compressionRatioY = areaMetric.height / (chartData.maxValY - chartData.minValY);
+        compressionRatioY = areaMetric.height / (chartData.maxY - chartData.minY);
 
     for (var lineIndex = 0, points; lineIndex < chartData.yDatas.length; lineIndex++) {
       if (chartData.yDatas[lineIndex].visible === false) {
@@ -1409,7 +1506,7 @@ var TChart = function () {
 
       for (var yIndex = 0; yIndex < chartData.yDatas[lineIndex].length; yIndex++) {
         points.push([areaMetric.x + (chartData.xData[yIndex] - chartData.minValX) * compressionRatioX, // areaMetric.height - inversion by Y
-        areaMetric.y + areaMetric.height - (chartData.yDatas[lineIndex][yIndex] - chartData.minValY) * compressionRatioY]);
+        areaMetric.y + areaMetric.height - (chartData.yDatas[lineIndex][yIndex] - chartData.minY) * compressionRatioY]);
       }
 
       drawingFunc(points, lineIndex);
@@ -1435,23 +1532,20 @@ var TChart = function () {
       var startAnimTime;
 
       if (reqAnimId) {
-        // onFinishedCallback();
         cancelAnimationFrame(reqAnimId);
       }
 
       reqAnimId = requestAnimationFrame(frame);
+      return this;
 
       function frame(timestamp) {
-        var isStarted = false;
-
         if (!startAnimTime) {
-          isStarted = true;
           startAnimTime = timestamp;
         }
 
         context.progress = timestamp - startAnimTime;
         context.duration = duration;
-        frameHandler.bind(context)(isStarted);
+        frameHandler.call(context);
 
         if (context.progress < duration) {
           reqAnimId = requestAnimationFrame(frame);
@@ -1460,8 +1554,6 @@ var TChart = function () {
           onFinishedCallback();
         }
       }
-
-      return this;
     }
 
     function easeOutExpo(t, b, c, d) {
@@ -1485,16 +1577,16 @@ var TChart = function () {
     return [min, max];
   }
 
-  function toHumanValue(val) {
-    if (val >= 1000000000) {
-      return Math.round(val / 1000000000) + 'G';
-    } else if (val >= 1000000) {
-      return Math.round(val / 1000000) + 'M';
-    } else if (val >= 1000) {
-      return Math.round(val / 1000) + 'K';
+  function toHumanValue(v) {
+    if (v >= 1000000000) {
+      return (v / 1000000000).toFixed(2) + 'G';
+    } else if (v >= 1000000) {
+      return (v / 1000000).toFixed(2) + 'M';
+    } else if (v >= 1000) {
+      return (v / 1000).toFixed(2) + 'K';
     }
 
-    return val > 0 ? Math.round(val) : val;
+    return v > 0 ? v.toFixed(2) : v;
   }
 
   function parentElementsHierarchy(e) {
