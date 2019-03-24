@@ -408,6 +408,11 @@ const TChart = (
             this._chartData = chartData;
         }
 
+        clear() {
+            super.clear();
+            this._pointsInfo.remove();
+        }
+
         _showInfo(chartData, opts, currXPos, points, lineIndex) {
             for (let i = 0, leftPointMidDist, rightPointMidDist; i < points.length; i++) {
                 if (i > 0) {
@@ -482,7 +487,6 @@ const TChart = (
 
             if (e.relatedTarget && !parentElementsHierarchy(e.relatedTarget).includes(this._pointsInfo.el)) {
                 this.clear();
-                this._pointsInfo.remove();
             }
         }
     }
@@ -896,6 +900,7 @@ const TChart = (
 
             this._zoom.whenVisibilityChanged = (visibilityFrame) => {
                 currVisibilityFrame = visibilityFrame;
+                this._infoLayer.clear();
 
                 this._render(chartData, opts, lastVisibleChartData, visibilityFrame, false);
 
