@@ -145,9 +145,17 @@ const TChart = (
                 this.whenRendered(this.el, data);
                 return html;
             };
+
             this._raiseEvent(this.EVENTS.CREATED, data);
-            this.whenCreated(this.el, data);
-            this.whenRendered(this.el, data);
+
+            let created = this.whenCreated(this.el, data);
+            if (created instanceof Promise) {
+                created.then(() => {
+                    this.whenRendered(this.el, data);
+                });
+            } else {
+                this.whenRendered(this.el, data);
+            }
         };
 
         _raiseEvent (eventName, data) {
@@ -179,17 +187,23 @@ const TChart = (
         }
 
         whenCreated (el) {
-            el.width = el.clientWidth;
-            el.height = el.clientHeight;
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    el.width = el.clientWidth;
+                    el.height = el.clientHeight;
 
-            let dpr = window.devicePixelRatio || 1,
-                canvasRect = el.getBoundingClientRect();
+                    let dpr = window.devicePixelRatio || 1,
+                        canvasRect = el.getBoundingClientRect();
 
-            el.width = canvasRect.width * dpr;
-            el.height = canvasRect.height * dpr;
+                    el.width = canvasRect.width * dpr;
+                    el.height = canvasRect.height * dpr;
 
-            this.ctx2d = el.getContext('2d');
-            this.ctx2d.scale(dpr, dpr);
+                    this.ctx2d = el.getContext('2d');
+                    this.ctx2d.scale(dpr, dpr);
+
+                    resolve();
+                }, 0);
+            });
         }
 
         render() {
@@ -197,11 +211,11 @@ const TChart = (
         }
     }
 
-    class XAxisLayer  extends CanvasHTMLComponent {
+    class XAxisLayerCanvasHTMLComponent  extends CanvasHTMLComponent {
         whenCreated(el) {
-            super.whenCreated(el);
-
-            el.className = 'x-axis';
+            return super.whenCreated(el).then(() => {
+                el.className = 'x-axis';
+            })
         }
 
         whenRendered(el, {chartData, opts}) {
@@ -239,7 +253,7 @@ const TChart = (
         }
     }
 
-    class YAxisLayer extends CanvasHTMLComponent {
+    class YAxisLayerCanvasHTMLComponent extends CanvasHTMLComponent {
         constructor() {
             super();
 
@@ -248,9 +262,9 @@ const TChart = (
         }
 
         whenCreated(el) {
-            super.whenCreated(el);
-
-            el.className = 'y-axis';
+            return super.whenCreated(el).then(() => {
+                el.className = 'y-axis';
+            });
         }
 
         whenRendered(el, {chartData, opts}) {
@@ -377,7 +391,7 @@ const TChart = (
         }
     }
 
-    class InfoLayer extends CanvasHTMLComponent {
+    class InfoLayerCanvasHTMLComponent extends CanvasHTMLComponent {
         constructor() {
             super();
 
@@ -386,22 +400,22 @@ const TChart = (
         }
 
         whenCreated(el, {chartData, opts}) {
-            super.whenCreated(el);
+            return super.whenCreated(el).then(() => {
+                el.className = 'info';
+                this._chartData = chartData;
 
-            el.className = 'info';
-            this._chartData = chartData;
+                el.addEventListener('mousemove', this._mouseMoveHandler.bind(this, opts));
+                el.addEventListener('mouseout', this._mouseOutHandler.bind(this));
 
-            el.addEventListener('mousemove', this._mouseMoveHandler.bind(this, opts));
-            el.addEventListener('mouseout', this._mouseOutHandler.bind(this));
+                this._pointsInfo.onMouseOut = (e) => {
+                    e.stopPropagation();
 
-            this._pointsInfo.onMouseOut = (e) => {
-                e.stopPropagation();
-
-                if (e.relatedTarget && !parentElementsHierarchy(e.relatedTarget).includes(this._pointsInfo.el)) {
-                    this.clear();
-                    this._pointsInfo.remove();
+                    if (e.relatedTarget && !parentElementsHierarchy(e.relatedTarget).includes(this._pointsInfo.el)) {
+                        this.clear();
+                        this._pointsInfo.remove();
+                    }
                 }
-            }
+            });
         }
 
         whenRendered(el, {chartData}) {
@@ -491,7 +505,7 @@ const TChart = (
         }
     }
 
-    class PlotLayer extends CanvasHTMLComponent {
+    class PlotLayerCanvasHTMLComponent extends CanvasHTMLComponent {
         constructor() {
             super();
 
@@ -500,9 +514,9 @@ const TChart = (
         }
 
         whenCreated(el) {
-            super.whenCreated(el);
-
-            el.className = 'plot';
+            return super.whenCreated(el).then(() => {
+                el.className = 'plot';
+            })
         }
 
         whenRendered(el, {chartData, opts, animate}) {
@@ -573,7 +587,7 @@ const TChart = (
         }
     }
 
-    class ZoomCarriage extends HTMLComponent {
+    class ZoomCarriageHTMLComponent extends HTMLComponent {
         NAME = 'zoom-carriage';
 
         constructor() {
@@ -622,11 +636,13 @@ const TChart = (
             addEventListeners(this._leftStretch, 'mousedown touchstart', this._stretchMouseDownHandler.bind(this));
             addEventListeners(this._rightStretch, 'mousedown touchstart', this._stretchMouseDownHandler.bind(this));
 
-            this.whenVisibilityChanged(this._currVisibilityFrame || this.visibilityFrame)
+            setTimeout(() => {
+                this.whenVisibilityChanged(this._currVisibilityFrame || this.visibilityFrame)
+            }, 0)
         }
 
         getRightShift() {
-            return parseFloat(this.el.style.right) || 0;
+            return (parseFloat(this.el.style.right) || 0);
         }
 
         _windowMouseMoveHandler(e) {
@@ -684,8 +700,8 @@ const TChart = (
             this._startStretchXPos = x;
 
             this._initProps.right = this.getRightShift();
-            this._initProps.width = this.el.clientWidth;
             this._initProps.left = this.el.offsetLeft;
+            this._initProps.width = this.el.clientWidth;
         }
 
         _setProps({width, right}) {
@@ -701,26 +717,32 @@ const TChart = (
         }
 
         _move(dist) {
-            let newRight = (this._initProps.right || 0) + dist;
+            let newRight = this._initProps.right + dist;
 
-            if (newRight >= 0 && newRight <= this.parent.el.clientWidth - (this._initProps.width || this.el.clientWidth)) {
+            if (newRight >= 0
+                && newRight <= this.parent.el.clientWidth - this._initProps.width
+            ) {
                 this._setProps({right: newRight + 'px'});
             }
         }
 
         _moveLeftStretch(dist) {
-            let newWidth = (this._initProps.width || this.el.clientWidth) + dist;
+            let newWidth = this._initProps.width + dist;
 
-            if (newWidth >= 135 && newWidth <= this.parent.el.clientWidth - (this._initProps.right || this.getRightShift())) {
+            if (newWidth >= 135
+                && newWidth <= this.parent.el.clientWidth - this._initProps.right
+            ) {
                 this._setProps({width: newWidth + 'px'});
             }
         }
 
         _moveRightStretch(dist) {
-            let newRight = (this._initProps.right || this.getRightShift()) + dist;
+            let newRight = this._initProps.right + dist;
 
-            if (newRight >= 0 && this.parent.el.clientWidth - (this._initProps.left || this.el.offsetLeft) - 135 >= newRight) {
-                let newWidth = (this._initProps.width || this.el.clientWidth) - dist;
+            if (newRight >= 0
+                && this.parent.el.clientWidth - this._initProps.left - 135 >= newRight
+            ) {
+                let newWidth = this._initProps.width - dist;
 
                 this._setProps({
                     right: newRight + 'px',
@@ -730,7 +752,7 @@ const TChart = (
         }
     }
 
-    class ZoomPlot extends CanvasHTMLComponent{
+    class ZoomPlotCanvasHTMLComponent extends CanvasHTMLComponent{
         whenRendered(el, {chartData, opts}) {
             let lineWidth = 1;
 
@@ -758,15 +780,15 @@ const TChart = (
         }
     }
 
-    class Zoom extends HTMLComponent {
+    class ZoomHTMLComponent extends HTMLComponent {
         NAME = 'zoom';
 
         constructor() {
             super();
 
-            this._plot = new ZoomPlot();
+            this._plot = new ZoomPlotCanvasHTMLComponent();
             this._overlay = new CanvasHTMLComponent();
-            this._zoomCarriage = new ZoomCarriage();
+            this._zoomCarriage = new ZoomCarriageHTMLComponent();
         }
 
         render({chartData, opts}) {
@@ -798,6 +820,8 @@ const TChart = (
             this._overlay.ctx2d.fillRect(0, 0, this._zoomCarriage.el.offsetLeft, this._overlay.el.clientHeight);
 
             let zoomCarriageRightShift = this._zoomCarriage.getRightShift();
+            //console.log(this._overlay.el.clientWidth)
+
             this._overlay.ctx2d.fillRect(
                 this._overlay.el.clientWidth - zoomCarriageRightShift,
                 0,
@@ -806,7 +830,7 @@ const TChart = (
         }
     }
 
-    class LegendItem extends HTMLComponent {
+    class LegendItemHTMLComponent extends HTMLComponent {
         NAME = 'li';
 
         constructor () {
@@ -847,7 +871,7 @@ const TChart = (
         }
     }
 
-    class Legend extends HTMLComponent {
+    class LegendHTMLComponent extends HTMLComponent {
         NAME = 'ul';
 
         constructor() {
@@ -859,7 +883,7 @@ const TChart = (
         render({chartData, opts}) {
             return `
                ${this._lines.map(({name, color}, lineIndex) => {
-                   let legendItem =  new LegendItem();
+                   let legendItem =  new LegendItemHTMLComponent();
                    legendItem.whenStateChanged = this.whenLegendItemStateChanged;
                    return legendItem.create(this, {name, color, lineIndex})
                 }).join('')} 
@@ -878,19 +902,19 @@ const TChart = (
         }
     }
 
-    class Chart extends HTMLComponent {
+    class ChartHTMLComponent extends HTMLComponent {
         NAME = 'chart';
 
         constructor() {
             super();
 
-            this._yAxisLayer = new YAxisLayer();
-            this._xAxisLayer = new XAxisLayer();
-            this._plotLayer = new PlotLayer();
-            this._infoLayer = new InfoLayer();
+            this._yAxisLayer = new YAxisLayerCanvasHTMLComponent();
+            this._xAxisLayer = new XAxisLayerCanvasHTMLComponent();
+            this._plotLayer = new PlotLayerCanvasHTMLComponent();
+            this._infoLayer = new InfoLayerCanvasHTMLComponent();
 
-            this._zoom = new Zoom();
-            this._legend = new Legend();
+            this._zoom = new ZoomHTMLComponent();
+            this._legend = new LegendHTMLComponent();
         }
 
         render({chartData, opts}) {
@@ -1105,7 +1129,7 @@ const TChart = (
         chartsContainer.innerHTML = '';
 
         for (let i = 0; i < data.length; i++) {
-            (new Chart()).create(
+            (new ChartHTMLComponent()).create(
                 chartsContainer,
                 {chartData: prepareChartData(data[i]), opts});
         }

@@ -1,5 +1,7 @@
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html, body {
@@ -8,8 +10,6 @@ html, body {
 }
 
 body {
-  //margin: 0;
-
   &.night-mode {
     background-color: #242F3E;
   }
@@ -39,13 +39,13 @@ body {
 chart {
   width: calc(50% - 10px);
   height: 50vh;
-  padding: 10px;
+  padding: 5px;
   position: relative;
 
   > canvas {
     position: absolute;
-    width: calc(100% - 20px);
-    height: calc(100% - 90px - 40px);
+    width: calc(100% - 10px);
+    height: calc(100% - 90px - 50px);
 
     &.x-axis, &.y-axis {
       z-index: 1;
@@ -61,9 +61,9 @@ chart {
   }
 
   zoom {
-    width: calc(100% - 20px);
+    width: calc(100% - 10px);
     height: 57px;
-    bottom: calc(10px + 40px);
+    bottom: calc(10px + 50px);
     position: absolute;
 
     canvas {
@@ -79,7 +79,7 @@ chart {
       border-top: 1.5px solid #e0eaf0;
       border-bottom: 1.5px solid #e0eaf0;
       bottom: 0;
-      right: 0;
+      right: 6px;
       cursor: move;
 
       .left-stretch {
@@ -137,7 +137,7 @@ chart {
   ul.legend {
     margin: 0;
     padding: 0;
-    bottom: 0;
+    bottom: 10px;
     border-collapse: separate;
     border-spacing: 5px;
     position: absolute;
@@ -178,6 +178,7 @@ chart {
 
 @media all and (max-width: 850px) {
   chart {
+    padding: 5px;
     width: calc(100% - 10px);
   }
 }
