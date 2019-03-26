@@ -902,6 +902,37 @@ const TChart = (
         }
     }
 
+    class DownloadChartHTMLComponent extends HTMLComponent {
+        NAME = 'a';
+
+        render(data) {
+            return ``
+        }
+
+        whenCreated(el, {plotLayer, xAxisLayer, yAxisLayer}) {
+            super.whenCreated(el);
+
+            el.className = 'download-chart';
+            el.innerText = 'Download As Image';
+            el.style.color = getColor('XYAxisLabels');
+
+            el.addEventListener('click', this.download.bind(this, {plotLayer, xAxisLayer, yAxisLayer}));
+        }
+
+        download ({plotLayer, xAxisLayer, yAxisLayer}, e) {
+            yAxisLayer.ctx2d.drawImage(
+                xAxisLayer.el,
+                0, 0, xAxisLayer.el.clientWidth, xAxisLayer.el.clientHeight
+            );
+            yAxisLayer.ctx2d.drawImage(
+                plotLayer.el,
+                0, 0, plotLayer.el.clientWidth, plotLayer.el.clientHeight
+            );
+            e.target.href = yAxisLayer.el.toDataURL('image/png');
+            e.target.download = 'bottle-design.png';
+        }
+    }
+
     class ChartHTMLComponent extends HTMLComponent {
         NAME = 'chart';
 
@@ -915,6 +946,7 @@ const TChart = (
 
             this._zoom = new ZoomHTMLComponent();
             this._legend = new LegendHTMLComponent();
+            this._download = new DownloadChartHTMLComponent();
         }
 
         render({chartData, opts}) {
@@ -949,6 +981,11 @@ const TChart = (
                 ${this._infoLayer.create(this, {chartData, opts})}
                 ${this._zoom.create(this, {chartData, opts: opts.zoom})}
                 ${this._legend.create(this, {chartData, opts})}
+                ${this._download.create(this, {
+                    plotLayer: this._plotLayer,
+                    xAxisLayer: this._xAxisLayer,
+                    yAxisLayer: this._yAxisLayer
+                })}
             `
         }
 
