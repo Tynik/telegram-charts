@@ -233,8 +233,8 @@ const TChart = (
                 this.el,
                 opts.drawingFrame,
                 chartData.xData,
-                chartData.minValX,
-                chartData.maxValX,
+                chartData.minX,
+                chartData.maxX,
                 (v, x) => {
                     let date = new Date(v),
                         label = MONTH_NAMES[date.getMonth()] + ' ' + date.getDate(),
@@ -243,7 +243,7 @@ const TChart = (
                         labelX = x - labelMidWidth,
                         labelXEnd = x + labelMidWidth;
 
-                    if (labelOccupiedWidth <= labelX && x >= labelMidWidth && labelXEnd <= this.el.clientWidth) {
+                    if (labelOccupiedWidth <= labelX && labelX >= 0 && labelXEnd <= this.el.clientWidth) {
                         labelOccupiedWidth = labelXEnd + 15; // + 15 minimal distance between labels
 
                         this.ctx2d.fillText(label, labelX, this.el.clientHeight);
@@ -797,7 +797,7 @@ const TChart = (
             return `
                 ${this._plot.create(this, {chartData, opts})}
                 ${this._overlay.create(this, {chartData, opts})}
-                ${this._zoomCarriage.create(this, {chartData, opts})}
+                ${this._zoomCarriage.create(this, {opts})}
             `
         }
 
@@ -939,7 +939,6 @@ const TChart = (
             this._legend.whenLegendItemStateChanged = (lineIndex, visible) => {
                 chartData.yDatas[lineIndex].visible = visible;
 
-                this._zoom._plot.rerender({chartData, opts: opts.zoom});
                 this._render(chartData, opts, lastVisibleChartData, currVisibilityFrame, true, true)
             };
 
@@ -961,24 +960,39 @@ const TChart = (
 
         _render (chartData, opts, lastVisibleChartData, visibilityFrame, recalculateMinMaxY=true, animate=false) {
             let xl = chartData.xData.length,
-            visibleXData = chartData.xData.slice(xl * visibilityFrame[0], xl * visibilityFrame[1]),
-            minMaxValX = minMax(visibleXData);
+                visibleXData = chartData.xData.slice(
+                    xl * visibilityFrame[0],
+                    xl * visibilityFrame[1]
+                ),
+                minMaxX = minMax(visibleXData);
 
             let visibleChartData = {
                 xData: visibleXData,
                 yDatas: [],
-                minValX: minMaxValX[0],
-                maxValX: minMaxValX[1],
+                minX: minMaxX[0],
+                maxX: minMaxX[1],
                 minY: null,
                 maxY: null,
                 colors: [],
                 names: chartData.names
             };
+            chartData.minY = null;
+            chartData.maxY = null;
 
             for (let lineIndex = 0, visibleData, pointsYLen; lineIndex < chartData.yDatas.length; lineIndex++) {
                 if (chartData.yDatas[lineIndex].visible === false) {
                     continue
                 }
+                let mm = minMax(chartData.yDatas[lineIndex]);
+                chartData.minY = chartData.minY === null
+                    ? mm[0]
+                    : Math.min(chartData.minY, mm[0]);
+
+                chartData.maxY = chartData.maxY === null
+                    ? mm[1]
+                    : Math.max(chartData.maxY, mm[1]);
+
+
                 visibleChartData.colors.push(chartData.colors[lineIndex]);
 
                 pointsYLen = chartData.yDatas[lineIndex].length;
@@ -1013,6 +1027,7 @@ const TChart = (
             this._xAxisLayer.rerender({chartData: visibleChartData, opts});
             this._plotLayer.rerender({chartData: visibleChartData, opts, animate});
             this._infoLayer.rerender({chartData: visibleChartData, opts});
+            this._zoom._plot.rerender({chartData, opts: opts.zoom});
         }
     }
 
@@ -1113,8 +1128,8 @@ const TChart = (
             yDatas: yDatas,
             names: names,
             colors: colors,
-            minValX: minMaxXData[0],
-            maxValX: minMaxXData[1],
+            minX: minMaxXData[0],
+            maxX: minMaxXData[1],
             minY: minY,
             maxY: maxY
         }
@@ -1139,16 +1154,16 @@ const TChart = (
      * @param {Object} canvas - Canvas HTML element
      * @param {Object} drawingFrame
      * @param {Array} data
-     * @param {Number} minValX
-     * @param {Number} maxValX
+     * @param {Number} minX
+     * @param {Number} maxX
      * @param {function} callback
      */
-    function bypassXPoints(canvas, drawingFrame, data, minValX, maxValX, callback) {
+    function bypassXPoints(canvas, drawingFrame, data, minX, maxX, callback) {
         let width = canvas.clientWidth - drawingFrame.x + drawingFrame.width,
-            compressionRatioX = width / (maxValX - minValX);
+            compressionRatioX = width / (maxX - minX);
 
         for (let i = 0; i < data.length; i++) {
-            let x = drawingFrame.x + (data[i] - minValX) * compressionRatioX;
+            let x = drawingFrame.x + (data[i] - minX) * compressionRatioX;
             callback(data[i], x)
         }
     }
@@ -1160,7 +1175,7 @@ const TChart = (
      * @param {function} drawingFunc
      */
     function drawPlot(areaMetric, chartData, drawingFunc) {
-        let compressionRatioX = areaMetric.width / (chartData.maxValX - chartData.minValX),
+        let compressionRatioX = areaMetric.width / (chartData.maxX - chartData.minX),
             compressionRatioY = areaMetric.height / (chartData.maxY - chartData.minY);
 
         for (let lineIndex = 0, points; lineIndex < chartData.yDatas.length; lineIndex++) {
@@ -1170,7 +1185,7 @@ const TChart = (
             points = [];
             for (let yIndex = 0; yIndex < chartData.yDatas[lineIndex].length; yIndex++) {
                 points.push([
-                    areaMetric.x + (chartData.xData[yIndex] - chartData.minValX) * compressionRatioX,
+                    areaMetric.x + (chartData.xData[yIndex] - chartData.minX) * compressionRatioX,
                     // areaMetric.height - inversion by Y
                     areaMetric.y + areaMetric.height - (
                         chartData.yDatas[lineIndex][yIndex] - chartData.minY
