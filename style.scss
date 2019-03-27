@@ -45,7 +45,7 @@ chart {
   > canvas {
     position: absolute;
     width: calc(100% - 10px);
-    height: calc(100% - 90px - 50px);
+    height: calc(100% - 90px - 50px - 16px);
 
     &.x-axis, &.y-axis {
       z-index: 1;
@@ -189,7 +189,6 @@ chart {
   }
 
   > .name {
-    position: absolute;
     font-family: "Helvetica Neue", serif;
     font-size: 16px;
     font-weight: 500;
