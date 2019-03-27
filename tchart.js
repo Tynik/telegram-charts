@@ -20,6 +20,8 @@ const TChart = (
             pointsInfoTitle: '#000',
             legendItemBorder: '#EFF3F5',
             legendItemName: '#000',
+            downloadChart: '#A1ACB3',
+            downloadChartOnHover: '#939EA5'
         },
         night: {
             background: '#242F3E',
@@ -33,6 +35,8 @@ const TChart = (
             pointsInfoTitle: '#FFF',
             legendItemBorder: '#495564',
             legendItemName: '#FFF',
+            downloadChart: '#4E5A69',
+            downloadChartOnHover: '#626E7D'
         }
     };
 
@@ -914,9 +918,15 @@ const TChart = (
 
             el.className = 'download-chart';
             el.title = 'Download this chart as image';
-            el.style.color = getColor('XYAxisLabels');
+            el.style.backgroundColor = getColor('downloadChart');
 
             el.addEventListener('click', this.download.bind(this, {plotLayer, xAxisLayer, yAxisLayer}));
+            el.addEventListener('mouseover', () => {
+                el.style.backgroundColor = getColor('downloadChartOnHover');
+            });
+            el.addEventListener('mouseout', () => {
+                el.style.backgroundColor = getColor('downloadChart');
+            });
         }
 
         download ({plotLayer, xAxisLayer, yAxisLayer}, e) {
