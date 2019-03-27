@@ -176,11 +176,16 @@ chart {
   }
 
   .download-chart {
+    width: 16px;
+    height: 16px;
     position: absolute;
-    bottom: 20px;
-    right: 0;
+    bottom: 25px;
+    right: 5px;
     text-decoration: none;
     cursor: pointer;
+    background-color: #546778;
+    mask-image: url("insert-picture-icon.svg");
+    -webkit-mask-image: url("insert-picture-icon.svg");
   }
 }
 

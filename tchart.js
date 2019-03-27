@@ -929,7 +929,7 @@ const TChart = (
                 0, 0, plotLayer.el.clientWidth, plotLayer.el.clientHeight
             );
             e.target.href = yAxisLayer.el.toDataURL('image/png');
-            e.target.download = 'bottle-design.png';
+            e.target.download = `chart-${this._id}.png`;
         }
     }
 
