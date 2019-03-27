@@ -949,7 +949,7 @@ const TChart = (
             this._download = new DownloadChartHTMLComponent();
         }
 
-        render({chartData, opts}) {
+        render({name, chartData, opts}) {
             let currVisibilityFrame,
                 visibilityChangedTimer,
                 lastVisibleChartData = {minY: null, maxY: null};
@@ -975,6 +975,7 @@ const TChart = (
             };
 
             return `
+                <div class="name">${name}</div>
                 ${this._plotLayer.create(this, {chartData, opts})}
                 ${this._yAxisLayer.create(this, {chartData, opts})}
                 ${this._xAxisLayer.create(this, {chartData, opts})}
@@ -990,6 +991,8 @@ const TChart = (
         }
 
         whenCreated(el, {chartData}) {
+            el.getElementsByClassName('name')[0].style.color = getColor('legendItemName');
+
             chartData.names.forEach((name, i) => {
                 this._legend.addLine({name, color: chartData.colors[i]})
             });
@@ -1183,7 +1186,7 @@ const TChart = (
         for (let i = 0; i < data.length; i++) {
             (new ChartHTMLComponent()).create(
                 chartsContainer,
-                {chartData: prepareChartData(data[i]), opts});
+                {name: 'Chart #' + (i + 1), chartData: prepareChartData(data[i]), opts});
         }
     }
 
