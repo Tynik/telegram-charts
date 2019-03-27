@@ -913,7 +913,7 @@ const TChart = (
             super.whenCreated(el);
 
             el.className = 'download-chart';
-            el.innerText = 'Download As Image';
+            el.title = 'Download this chart as image';
             el.style.color = getColor('XYAxisLabels');
 
             el.addEventListener('click', this.download.bind(this, {plotLayer, xAxisLayer, yAxisLayer}));
