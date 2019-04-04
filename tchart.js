@@ -654,9 +654,11 @@ let TChart = (
 
         _windowMouseMoveHandler(e) {
             let x = e.screenX;
-            if (e instanceof TouchEvent) {
-                x = e.changedTouches[0].screenX
-            }
+            try {
+                if (e instanceof TouchEvent) {
+                    x = e.changedTouches[0].screenX
+                }
+            } catch (e) { }
             let dist = this._startStretchXPos - x;
 
             if (this._moveIsActive) {
@@ -682,9 +684,12 @@ let TChart = (
             e.stopPropagation();
 
             let x = e.screenX;
-            if (e instanceof TouchEvent) {
-                x = e.touches[0].screenX
-            }
+            try {
+                if (e instanceof TouchEvent) {
+                    x = e.touches[0].screenX
+                }
+            } catch (e) { }
+
             this._moveIsActive = true;
             this._startStretchXPos = x;
             this._initProps.right = this.getRightShift();
@@ -695,9 +700,12 @@ let TChart = (
             e.stopPropagation();
 
             let x = e.screenX;
-            if (e instanceof TouchEvent) {
-                x = e.touches[0].screenX
-            }
+            try {
+                if (e instanceof TouchEvent) {
+                    x = e.touches[0].screenX
+                }
+            } catch (e) { }
+
             if (e.target === this._leftStretch) {
                 this._leftStretchIsActive = true;
 
