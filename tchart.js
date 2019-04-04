@@ -1,15 +1,18 @@
-const TChart = (
+let TChart = (
 () => {
     let requestAnimationFrame = window.requestAnimationFrame
+        || window.webkitRequestAnimationFrame
         || window.mozRequestAnimationFrame
-        ||  window.webkitRequestAnimationFrame
-        || window.msRequestAnimationFrame,
-
+        || window.oRequestAnimationFrame
+        || window.msRequestAnimationFrame
+        || function (callback) {
+            window.setTimeout(callback, 1000 / 60);
+        },
         cancelAnimationFrame = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
 
     let colorsMap = {
         day: {
-            background: '#FFF',
+            background: '#FFF1',
             XYAxisLabels: '#A1ACB3',
             gridBottomBorder: '#cacccd',
             gridLine: '#d4d6d7',
@@ -986,10 +989,12 @@ const TChart = (
 
             return `
                 <div class="name">${name}</div>
-                ${this._plotLayer.create(this, {chartData, opts})}
-                ${this._yAxisLayer.create(this, {chartData, opts})}
-                ${this._xAxisLayer.create(this, {chartData, opts})}
-                ${this._infoLayer.create(this, {chartData, opts})}
+                <div class="layers">
+                    ${this._plotLayer.create(this, {chartData, opts})}
+                    ${this._yAxisLayer.create(this, {chartData, opts})}
+                    ${this._xAxisLayer.create(this, {chartData, opts})}
+                    ${this._infoLayer.create(this, {chartData, opts})}
+                </div>
                 ${this._zoom.create(this, {chartData, opts: opts.zoom})}
                 ${this._legend.create(this, {chartData, opts})}
                 ${this._download.create(this, {
@@ -1329,3 +1334,5 @@ const TChart = (
         return parents
     }
 })();
+
+window.TChart = TChart;
