@@ -1021,9 +1021,29 @@ let TChart = (
             });
         }
 
+        _smoothing (data, k=30) {
+            let result = [];
+            for (let i = 0, p, pv; i <= data.length; i++) {
+                if (pv === undefined) {
+                    result.push(data[i]);
+
+                } else {
+                    let d = data[i] - pv,
+                        n = d / k;
+
+                    for (p = 1; p <= k; p++) {
+                        result.push(pv + n * p);
+                    }
+                }
+                pv = data[i];
+            }
+            return result
+        }
+
         _render (chartData, opts, lastVisibleChartData, visibilityFrame, recalculateMinMaxY=true, animate=false) {
-            let xl = chartData.xData.length,
-                visibleXData = chartData.xData.slice(
+            let xData = this._smoothing(chartData.xData),
+                xl = xData.length,
+                visibleXData = xData.slice(
                     xl * visibilityFrame[0],
                     xl * visibilityFrame[1]
                 ),
@@ -1058,8 +1078,9 @@ let TChart = (
 
                 visibleChartData.colors.push(chartData.colors[lineIndex]);
 
-                pointsYLen = chartData.yDatas[lineIndex].length;
-                visibleData = chartData.yDatas[lineIndex].slice(
+                let yDatas = this._smoothing(chartData.yDatas[lineIndex]);
+                pointsYLen = yDatas.length;
+                visibleData = yDatas.slice(
                     pointsYLen * visibilityFrame[0],
                     pointsYLen * visibilityFrame[1]
                 );
